@@ -21,7 +21,12 @@ class RobAI {
     // Authorized users - ONLY these two can access
     this.authorizedUsers = {
       'admin': 'Rob2024!Secure',
-      'Jose': 'Business2024!'
+      'Jose': 'temp123'  // Temporary password - must be changed on first login
+    };
+
+    // Track temporary passwords that must be changed
+    this.temporaryPasswords = {
+      'Jose': true  // Jose must change password on first login
     };
 
     // DOM Elements
@@ -269,8 +274,14 @@ class RobAI {
 
     // Check credentials
     if (this.authorizedUsers[username] && this.authorizedUsers[username] === password) {
-      // Successful login
-      this.authenticateUser(username);
+      // Check if this is a temporary password that needs to be changed
+      if (this.temporaryPasswords[username]) {
+        console.log(`🔑 Temporary password detected for ${username} - forcing password change`);
+        this.showPasswordChangeForm(username);
+      } else {
+        // Regular successful login
+        this.authenticateUser(username);
+      }
     } else {
       // Failed login
       this.showLoginError(
@@ -312,6 +323,78 @@ class RobAI {
     // Auto-hide error after 5 seconds
     setTimeout(() => {
       errorEl.style.display = 'none';
+    }, 5000);
+  }
+
+  showPasswordChangeForm(username) {
+    // Hide any other screens
+    if (this.app) {
+      this.app.style.display = 'none';
+    }
+
+    // Show password change form
+    const passwordChangeForm = document.getElementById('passwordChangeForm');
+    passwordChangeForm.style.display = 'flex';
+
+    // Set current password (readonly)
+    document.getElementById('currentPassword').value = this.authorizedUsers[username];
+
+    // Store username for password change
+    this.pendingPasswordChangeUser = username;
+
+    // Setup form handler
+    const form = document.getElementById('changePasswordForm');
+    const newForm = form.cloneNode(true);
+    form.parentNode.replaceChild(newForm, form);
+
+    newForm.addEventListener('submit', (e) => {
+      this.handlePasswordChange(e);
+    });
+
+    console.log(`🔑 Password change form shown for ${username}`);
+  }
+
+  handlePasswordChange(event) {
+    event.preventDefault();
+
+    const newPassword = document.getElementById('newPassword').value;
+    const confirmPassword = document.getElementById('confirmPassword').value;
+
+    // Validate passwords
+    if (newPassword.length < 8) {
+      this.showPasswordError('Password must be at least 8 characters long');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      this.showPasswordError('Passwords do not match');
+      return;
+    }
+
+    if (newPassword === this.authorizedUsers[this.pendingPasswordChangeUser]) {
+      this.showPasswordError('New password must be different from temporary password');
+      return;
+    }
+
+    // Update password and remove temporary flag
+    this.authorizedUsers[this.pendingPasswordChangeUser] = newPassword;
+    this.temporaryPasswords[this.pendingPasswordChangeUser] = false;
+
+    console.log(`✅ Password changed successfully for ${this.pendingPasswordChangeUser}`);
+
+    // Hide password change form and authenticate user
+    document.getElementById('passwordChangeForm').style.display = 'none';
+    this.authenticateUser(this.pendingPasswordChangeUser);
+  }
+
+  showPasswordError(message) {
+    const errorDiv = document.getElementById('passwordError');
+    errorDiv.textContent = message;
+    errorDiv.style.display = 'block';
+
+    // Hide error after 5 seconds
+    setTimeout(() => {
+      errorDiv.style.display = 'none';
     }, 5000);
   }
 
