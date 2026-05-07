@@ -547,9 +547,15 @@ class RobAI {
     const message = this.messageInput.value.trim();
     if (!message) return;
 
-    // Stop any current speech immediately when user sends message
+    // Stop any current speech and disable voice responses when user sends message
     this.stopCurrentSpeech();
-    console.log('🔇 Speech stopped - user sending new message');
+
+    // Turn off the voice toggle/LISTEN button
+    if (this.isVoiceEnabled) {
+      this.isVoiceEnabled = false;
+      this.voiceToggle.classList.remove('active');
+      console.log('🔇 Voice disabled - user sending new message');
+    }
 
     // Add user message to chat
     this.addMessage(message, 'user');
@@ -590,16 +596,21 @@ class RobAI {
         // Hide typing indicator
         this.hideTyping();
 
+        // Check voice state at delivery time
+        console.log(`🔊 Voice state at delivery: isVoiceEnabled=${this.isVoiceEnabled}, hasAudioBuffer=${!!data.audioBuffer}`);
+
         // SYNCHRONIZED DELIVERY: Hold text until voice is ready
         if (this.isVoiceEnabled && data.audioBuffer) {
-          console.log(`🎯 SYNCHRONIZED DELIVERY: Preparing text and voice together`);
-          this.deliverSynchronizedResponse(data.response, data.audioBuffer);
+          console.log(`🎯 USING SYNCHRONIZED DELIVERY`);
+          await this.deliverSynchronizedResponse(data.response, data.audioBuffer);
         } else {
+          console.log(`📝 USING REGULAR TEXT DELIVERY`);
           // Regular text-only delivery
           this.addMessage(data.response, 'rob');
 
           if (this.isVoiceEnabled) {
             // Fallback voice generation
+            console.log(`🔄 Using fallback voice generation`);
             this.speakRobResponse(data.response);
           }
         }
@@ -785,15 +796,23 @@ class RobAI {
       // Create audio element but DON'T play yet
       this.currentAudio = new Audio(audioUrl);
 
-      // Wait for audio to be fully loaded and ready
-      await new Promise((resolve, reject) => {
-        this.currentAudio.oncanplaythrough = () => {
-          console.log(`🎯 AUDIO READY: ${audioBlob.size} bytes loaded and ready`);
-          resolve();
-        };
-        this.currentAudio.onerror = reject;
-        this.currentAudio.load(); // Start loading
-      });
+      // Wait for audio to be fully loaded and ready (with timeout)
+      await Promise.race([
+        new Promise((resolve, reject) => {
+          this.currentAudio.oncanplaythrough = () => {
+            console.log(`🎯 AUDIO READY: ${audioBlob.size} bytes loaded and ready`);
+            resolve();
+          };
+          this.currentAudio.onerror = (e) => {
+            console.error('Audio loading error:', e);
+            reject(e);
+          };
+          this.currentAudio.load(); // Start loading
+        }),
+        new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('Audio loading timeout')), 5000); // 5 second timeout
+        })
+      ]);
 
       // Add visual feedback
       if (this.voiceToggle) {
