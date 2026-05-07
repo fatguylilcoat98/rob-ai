@@ -332,20 +332,23 @@ Source dates: ${realTimeData.results.map(r => r.publishedDate).join(', ')}`;
       content: `[Language: ${detectedLanguage}] ${message}`
     });
 
-    // Get response from OpenAI
+    // Get response from OpenAI (optimized for speed)
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-4o-mini", // Fast model
       messages: contextMessages,
-      max_tokens: 800,
+      max_tokens: 600, // Reduced for faster responses
       temperature: 0.7,
       frequency_penalty: 0.1,
-      presence_penalty: 0.1
+      presence_penalty: 0.1,
+      stream: false // Ensure we get complete response quickly
     });
 
     const response = completion.choices[0].message.content.trim();
 
-    // Store conversation (encrypted)
-    await storeConversation(userId, message, response, detectedLanguage);
+    // Store conversation (encrypted) - Don't await to speed up response
+    storeConversation(userId, message, response, detectedLanguage).catch(err =>
+      console.error('Background conversation storage failed:', err)
+    );
 
     // Log interaction (no personal data)
     const searchInfo = realTimeData ? ` + real-time data (${realTimeData.results.length} sources)` : '';
@@ -354,7 +357,8 @@ Source dates: ${realTimeData.results.map(r => r.publishedDate).join(', ')}`;
     res.json({
       response,
       language: detectedLanguage,
-      userId: userId
+      userId: userId,
+      timestamp: new Date().toISOString()
     });
 
   } catch (error) {
@@ -370,6 +374,161 @@ Source dates: ${realTimeData.results.map(r => r.publishedDate).join(', ')}`;
     });
   }
 });
+
+// Fast chat endpoint with simultaneous voice generation
+app.post('/api/chat-with-voice', async (req, res) => {
+  try {
+    const { message, userId = uuidv4() } = req.body;
+
+    if (!message || !message.trim()) {
+      return res.status(400).json({
+        error: 'Message is required',
+        error_es: 'El mensaje es requerido'
+      });
+    }
+
+    // Detect language
+    const detectedLanguage = detectLanguage(message);
+
+    // Check if we need real-time search
+    const needsRealTimeSearch = shouldUseRealTimeSearch(message);
+    let realTimeData = null;
+
+    if (needsRealTimeSearch) {
+      realTimeData = await searchRealTimeData(message, detectedLanguage);
+    }
+
+    // Get conversation history for context
+    const history = await getConversationHistory(userId, 5);
+
+    // Build context from history
+    let contextMessages = [
+      {
+        role: "system",
+        content: ROB_SYSTEM_PROMPT
+      }
+    ];
+
+    // Add recent conversation history
+    history.forEach(conv => {
+      contextMessages.push(
+        { role: "user", content: conv.message },
+        { role: "assistant", content: conv.response }
+      );
+    });
+
+    // Add real-time data context if available
+    if (realTimeData) {
+      const realTimeContext = `[REAL-TIME DATA] Current insights for "${realTimeData.searchQuery}":
+${realTimeData.summary}
+
+Key findings:
+${realTimeData.results.map(r => `- ${r.title}: ${r.content.substring(0, 200)}...`).join('\n')}
+
+Source dates: ${realTimeData.results.map(r => r.publishedDate).join(', ')}`;
+
+      contextMessages.push({
+        role: "system",
+        content: realTimeContext
+      });
+    }
+
+    // Add current message
+    contextMessages.push({
+      role: "user",
+      content: `[Language: ${detectedLanguage}] ${message}`
+    });
+
+    // Generate text and voice in parallel for maximum speed
+    const textPromise = openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: contextMessages,
+      max_tokens: 600,
+      temperature: 0.7,
+      frequency_penalty: 0.1,
+      presence_penalty: 0.1
+    });
+
+    // Wait for text response first
+    const completion = await textPromise;
+    const response = completion.choices[0].message.content.trim();
+
+    // Generate voice immediately after text is ready (overlapped processing)
+    const voicePromise = generateVoiceResponse(response, detectedLanguage);
+
+    // Store conversation in background (non-blocking)
+    storeConversation(userId, message, response, detectedLanguage).catch(err =>
+      console.error('Background conversation storage failed:', err)
+    );
+
+    // Wait for voice generation to complete
+    const audioBuffer = await voicePromise;
+
+    // Log interaction
+    const searchInfo = realTimeData ? ` + real-time data (${realTimeData.results.length} sources)` : '';
+    console.log(`🚀 Fast Rob response: ${detectedLanguage} language, ${message.length} chars input, ${response.length} chars output${searchInfo}`);
+
+    // Return both text and voice data together
+    res.json({
+      response,
+      language: detectedLanguage,
+      userId: userId,
+      audioBuffer: audioBuffer ? audioBuffer.toString('base64') : null,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('Fast chat error:', error);
+    res.status(500).json({
+      error: 'Failed to generate response',
+      error_es: 'Error al generar respuesta'
+    });
+  }
+});
+
+// Helper function to generate voice response
+async function generateVoiceResponse(text, language) {
+  try {
+    // Clean text for speech
+    const cleanText = text
+      .replace(/<[^>]*>/g, '')
+      .replace(/\*\*/g, '')
+      .replace(/\*/g, '')
+      .replace(/###|##|#/g, '')
+      .replace(/```[\s\S]*?```/g, '')
+      .replace(/`([^`]+)`/g, '$1')
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+      .trim();
+
+    if (!cleanText) return null;
+
+    // Select voice based on language
+    let selectedVoice, speed;
+    if (language === 'en') {
+      selectedVoice = 'onyx';
+      speed = 1.0;
+    } else {
+      selectedVoice = 'echo';
+      speed = 0.95;
+    }
+
+    // Generate voice with OpenAI TTS (using faster tts-1 model)
+    const speech = await openai.audio.speech.create({
+      model: "tts-1", // Faster than tts-1-hd, still good quality
+      voice: selectedVoice,
+      input: cleanText,
+      speed: speed
+    });
+
+    const buffer = Buffer.from(await speech.arrayBuffer());
+    console.log(`🎙️ Fast voice generated: ${selectedVoice}, ${buffer.length} bytes`);
+
+    return buffer;
+  } catch (error) {
+    console.error('Voice generation error:', error);
+    return null;
+  }
+}
 
 // Voice endpoint
 app.post('/api/voice', async (req, res) => {

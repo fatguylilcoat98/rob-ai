@@ -560,7 +560,11 @@ class RobAI {
     this.showTyping();
 
     try {
-      const response = await fetch('/api/chat', {
+      // Use the fast synchronized endpoint if voice is enabled
+      const endpoint = this.isVoiceEnabled ? '/api/chat-with-voice' : '/api/chat';
+      console.log(`🚀 Using ${endpoint} for ${this.isVoiceEnabled ? 'synchronized' : 'text-only'} response`);
+
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -584,6 +588,15 @@ class RobAI {
 
         // Add Rob's response
         this.addMessage(data.response, 'rob');
+
+        // Play audio immediately if we have it (synchronized delivery)
+        if (this.isVoiceEnabled && data.audioBuffer) {
+          console.log(`🎯 INSTANT PLAY: Text and voice delivered together`);
+          this.playAudioBuffer(data.audioBuffer);
+        } else if (this.isVoiceEnabled) {
+          // Fallback for backward compatibility
+          this.speakRobResponse(data.response);
+        }
 
         // Auto-play voice response if LISTEN is enabled
         if (this.isVoiceEnabled) {
@@ -746,6 +759,44 @@ class RobAI {
     if (this.currentAudio) {
       this.currentAudio.pause();
       this.currentAudio = null;
+    }
+  }
+
+  playAudioBuffer(base64AudioData) {
+    try {
+      // Convert base64 to blob
+      const audioBytes = atob(base64AudioData);
+      const audioArray = new Uint8Array(audioBytes.length);
+      for (let i = 0; i < audioBytes.length; i++) {
+        audioArray[i] = audioBytes.charCodeAt(i);
+      }
+
+      const audioBlob = new Blob([audioArray], { type: 'audio/mpeg' });
+      const audioUrl = URL.createObjectURL(audioBlob);
+
+      // Add visual feedback
+      if (this.voiceToggle) {
+        this.voiceToggle.style.background = 'linear-gradient(135deg, var(--success-color), var(--primary-color))';
+      }
+
+      // Create and play audio element
+      this.currentAudio = new Audio(audioUrl);
+      this.currentAudio.onended = () => {
+        this.cleanupAudio();
+        URL.revokeObjectURL(audioUrl); // Clean up blob URL
+      };
+      this.currentAudio.onerror = () => {
+        console.error('Audio playback failed');
+        this.cleanupAudio();
+        URL.revokeObjectURL(audioUrl);
+      };
+
+      this.currentAudio.play();
+      console.log(`🔊 SYNCHRONIZED AUDIO: Playing ${audioBlob.size} byte buffer`);
+
+    } catch (error) {
+      console.error('❌ Audio buffer playback error:', error);
+      this.cleanupAudio();
     }
   }
 
