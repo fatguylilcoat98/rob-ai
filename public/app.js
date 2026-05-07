@@ -758,25 +758,6 @@ class RobAI {
 
     // Use enhanced browser TTS with premium voice selection
     this.speakWithPremiumVoice(cleanText);
-      });
-
-      if (response.ok) {
-        const audioBlob = await response.blob();
-        const audioUrl = URL.createObjectURL(audioBlob);
-        const audio = new Audio(audioUrl);
-
-        audio.play().catch(error => {
-          console.error('Audio playback failed:', error);
-        });
-
-        // Clean up
-        audio.onended = () => {
-          URL.revokeObjectURL(audioUrl);
-        };
-      }
-    } catch (error) {
-      console.error('Voice synthesis failed:', error);
-    }
   }
 
   async deleteUserData() {
