@@ -65,7 +65,7 @@ class RobAI {
   }
 
   checkAuthentication() {
-    const authData = sessionStorage.getItem('rob-auth');
+    const authData = localStorage.getItem('rob-auth');
     if (authData) {
       try {
         const parsed = JSON.parse(authData);
@@ -75,6 +75,7 @@ class RobAI {
         if (parsed.expires > now && this.authorizedUsers[parsed.username]) {
           this.isAuthenticated = true;
           this.currentUser = parsed.username;
+          console.log(`🔓 Persistent login restored for ${parsed.username}`);
           return;
         }
       } catch (e) {
@@ -83,7 +84,7 @@ class RobAI {
     }
 
     // Clear invalid auth
-    sessionStorage.removeItem('rob-auth');
+    localStorage.removeItem('rob-auth');
     this.isAuthenticated = false;
     this.currentUser = null;
   }
@@ -287,16 +288,16 @@ class RobAI {
     this.isAuthenticated = true;
     this.currentUser = username;
 
-    // Create session (expires in 24 hours)
+    // Create persistent session (expires in 24 hours)
     const authData = {
       username: username,
       expires: Date.now() + (24 * 60 * 60 * 1000), // 24 hours
       timestamp: Date.now()
     };
 
-    sessionStorage.setItem('rob-auth', JSON.stringify(authData));
+    localStorage.setItem('rob-auth', JSON.stringify(authData));
 
-    console.log(`User ${username} authenticated successfully`);
+    console.log(`🔒 User ${username} authenticated successfully (persistent login enabled)`);
 
     // Initialize the app
     this.initializeApp();
@@ -317,7 +318,8 @@ class RobAI {
     // Clear authentication
     this.isAuthenticated = false;
     this.currentUser = null;
-    sessionStorage.removeItem('rob-auth');
+    localStorage.removeItem('rob-auth');
+    console.log('🔓 User logged out and persistent session cleared');
 
     console.log('User logged out');
 
