@@ -553,17 +553,11 @@ class RobAI {
     // Stop current speech
     this.stopCurrentSpeech();
 
-    // Turn off SPEAK button (voice input) immediately and completely
-    this.stopVoiceInput();
-    this.isRecording = false;
-    if (this.voiceInputBtn) {
-      this.voiceInputBtn.classList.remove('active');
-      this.voiceInputBtn.disabled = false; // Reset button state
+    // Turn off SPEAK button (voice input) if it's active
+    if (this.isRecording) {
+      this.stopVoiceInput();
+      console.log('🎤 SPEAK button turned OFF - user sent message');
     }
-    if (this.recognition) {
-      this.recognition.stop();
-    }
-    console.log('🎤 SPEAK button turned OFF and reset - user sent message');
 
     // Add user message to chat
     this.addMessage(message, 'user');
