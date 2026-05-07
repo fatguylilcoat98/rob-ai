@@ -144,7 +144,18 @@ function shouldUseRealTimeSearch(message) {
 }
 
 // Rob's core identity and system prompt
-const ROB_SYSTEM_PROMPT = `You are Rob, José's direct AI assistant for business strategy and LinkedIn content creation.
+const ROB_SYSTEM_PROMPT = `You are Rob, a direct AI assistant for business strategy and LinkedIn content creation. You were built by Chris Hughes at The Good Neighbor Guard (thegoodneighborguard.com).
+
+MEMORY AND CONTEXT: You actively remember everything users tell you about themselves, their business, their goals, and their audience. Store this information mentally and reference it in future conversations to provide increasingly personalized advice. Remember:
+- Their business type, industry, and size
+- Their target audience and customer demographics
+- Their revenue goals and current challenges
+- Their LinkedIn following and engagement metrics
+- Their content preferences and what's worked before
+- Their personal brand positioning and unique value
+- Any specific projects, campaigns, or initiatives they mention
+
+Use this accumulated knowledge to give more precise, personalized advice over time. Reference their goals and context naturally without explicitly mentioning you're remembering.
 
 You speak in short punchy sentences and paragraphs. No numbered lists. No bullet points. No formatting. Just direct conversational hits that convert.
 
@@ -154,15 +165,15 @@ You help with LinkedIn content creation like reels scripts, hooks, viral ideas. 
 
 REAL-TIME DATA ACCESS: You have access to current market data, LinkedIn trends, business news, and real-time insights. When users ask about current events, trends, or recent developments, you can provide up-to-date information. Use this to give cutting-edge advice based on what's actually happening now in business and LinkedIn marketing.
 
-Never be generic or cliché. Never sugarcoat truth. Never give long answers without substance. Never sound like boring corporate. Never invent data or statistics. Never lose focus on results and action. Never use lists or numbered formatting.
+CREATOR ATTRIBUTION: When asked who created you or who built you, respond directly and proudly: "I was built by Chris Hughes at The Good Neighbor Guard - thegoodneighborguard.com. Direct business strategy, no fluff."
 
-José helps entrepreneurs, creators, and professionals monetize knowledge. He positions them to scale using content and technology. He has 25,000+ LinkedIn followers. Expert in tech sales and personal branding. His audience wants to grow, sell more, stop wasting time.
+Never be generic or cliché. Never sugarcoat truth. Never give long answers without substance. Never sound like boring corporate. Never invent data or statistics. Never lose focus on results and action. Never use lists or numbered formatting.
 
 Instead of "Here are some ideas" you say "Three moves. Pick one." Instead of "That's a great question" you just answer it. Instead of "You might want to consider" you say "Do this." Short. Sharp. No applause. Just results.
 
 Auto-detect Spanish or English input, default to Spanish responses unless English is clearly preferred.
 
-You're here to help José and his audience get results, make money, and cut through the noise. Be the advisor who tells them what they need to hear, not what they want to hear. Speak in flowing conversational paragraphs, never lists or bullets.
+You're here to help users get results, make money, and cut through the noise. Be the advisor who tells them what they need to hear, not what they want to hear. Speak in flowing conversational paragraphs, never lists or bullets.
 
 When you have current data from real-time search, integrate it naturally into your advice without mentioning the search explicitly.`;
 
@@ -266,6 +277,83 @@ async function getConversationHistory(userId, limit = 10) {
   }
 }
 
+// Extract user information and business context from conversation history
+async function extractUserContext(userId) {
+  try {
+    // Get more conversation history for better context
+    const { data, error } = await supabase
+      .from('conversations')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(15); // More history for better user profiling
+
+    if (error || !data || data.length === 0) {
+      return null;
+    }
+
+    // Decrypt conversations and extract user information
+    const allMessages = data.map(conv => {
+      const message = decrypt(conv.message_encrypted);
+      return message || '';
+    }).filter(msg => msg.length > 0).join(' ');
+
+    if (allMessages.length < 50) {
+      return null; // Not enough content to extract meaningful context
+    }
+
+    // Create a prompt to extract user context
+    const contextPrompt = `Extract key business information about this user from their messages:
+
+User messages: "${allMessages}"
+
+Identify and summarize:
+- Business type/industry
+- Target audience details
+- Goals and challenges
+- LinkedIn metrics or following mentioned
+- Revenue/business size indicators
+- Specific projects, campaigns, or initiatives
+- Personal brand elements or positioning
+
+Format as a brief professional summary that Rob can use to personalize future advice. Only include confirmed information, no assumptions.`;
+
+    try {
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: "You are an expert at extracting business context from user conversations. Be concise and focus on actionable details. Only include information explicitly mentioned by the user."
+          },
+          {
+            role: "user",
+            content: contextPrompt
+          }
+        ],
+        max_tokens: 250,
+        temperature: 0.3
+      });
+
+      const userContext = completion.choices[0].message.content.trim();
+
+      if (userContext && userContext.length > 50 && !userContext.toLowerCase().includes('no clear business information')) {
+        console.log(`📋 Extracted user context for personalization: ${userContext.substring(0, 80)}...`);
+        return userContext;
+      }
+
+    } catch (contextError) {
+      console.error('Context extraction failed:', contextError);
+    }
+
+    return null;
+
+  } catch (error) {
+    console.error('Error extracting user context:', error);
+    return null;
+  }
+}
+
 // API Routes
 
 // Chat endpoint
@@ -293,6 +381,9 @@ app.post('/api/chat', async (req, res) => {
 
     // Get conversation history for context
     const history = await getConversationHistory(userId, 5);
+
+    // Extract user business context for personalization
+    const userContext = await extractUserContext(userId);
 
     // Build context from history
     let contextMessages = [
@@ -323,6 +414,14 @@ Source dates: ${realTimeData.results.map(r => r.publishedDate).join(', ')}`;
       contextMessages.push({
         role: "system",
         content: realTimeContext
+      });
+    }
+
+    // Add user business context for personalization
+    if (userContext) {
+      contextMessages.push({
+        role: "system",
+        content: `[USER CONTEXT] Business information about this user: ${userContext}`
       });
     }
 
@@ -401,6 +500,9 @@ app.post('/api/chat-with-voice', async (req, res) => {
     // Get conversation history for context
     const history = await getConversationHistory(userId, 5);
 
+    // Extract user business context for personalization
+    const userContext = await extractUserContext(userId);
+
     // Build context from history
     let contextMessages = [
       {
@@ -430,6 +532,14 @@ Source dates: ${realTimeData.results.map(r => r.publishedDate).join(', ')}`;
       contextMessages.push({
         role: "system",
         content: realTimeContext
+      });
+    }
+
+    // Add user business context for personalization
+    if (userContext) {
+      contextMessages.push({
+        role: "system",
+        content: `[USER CONTEXT] Business information about this user: ${userContext}`
       });
     }
 
