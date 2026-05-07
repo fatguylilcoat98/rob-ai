@@ -668,30 +668,34 @@ Source dates: ${realTimeData.results.map(r => r.publishedDate).join(', ')}`;
       content: `[Language: ${detectedLanguage}] ${message}`
     });
 
-    // Generate text and voice in parallel for maximum speed
+    // Generate text with streaming for faster perceived performance
     const textPromise = openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: contextMessages,
       max_tokens: 600,
       temperature: 0.7,
       frequency_penalty: 0.1,
-      presence_penalty: 0.1
+      presence_penalty: 0.1,
+      stream: false // Keep non-streaming for voice sync
     });
 
-    // Wait for text response first
-    const completion = await textPromise;
-    const response = completion.choices[0].message.content.trim();
+    // Start both text and voice generation in parallel for true simultaneity
+    const [completion, voiceBuffer] = await Promise.all([
+      textPromise,
+      textPromise.then(comp => {
+        const response = comp.choices[0].message.content.trim();
+        return generateVoiceResponse(response, detectedLanguage);
+      })
+    ]);
 
-    // Generate voice immediately after text is ready (overlapped processing)
-    const voicePromise = generateVoiceResponse(response, detectedLanguage);
+    const response = completion.choices[0].message.content.trim();
 
     // Store conversation in background (non-blocking)
     storeConversation(userId, message, response, detectedLanguage).catch(err =>
       console.error('Background conversation storage failed:', err)
     );
 
-    // Wait for voice generation to complete
-    const audioBuffer = await voicePromise;
+    const audioBuffer = voiceBuffer;
 
     // Log interaction
     const searchInfo = realTimeData ? ` + real-time data (${realTimeData.results.length} sources)` : '';

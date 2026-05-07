@@ -547,6 +547,10 @@ class RobAI {
     const message = this.messageInput.value.trim();
     if (!message) return;
 
+    // Stop any current speech immediately when user sends message
+    this.stopCurrentSpeech();
+    console.log('🔇 Speech stopped - user sending new message');
+
     // Add user message to chat
     this.addMessage(message, 'user');
 
@@ -586,16 +590,18 @@ class RobAI {
         // Hide typing indicator
         this.hideTyping();
 
-        // Add Rob's response
-        this.addMessage(data.response, 'rob');
-
-        // Play audio immediately if we have it (synchronized delivery)
+        // SYNCHRONIZED DELIVERY: Hold text until voice is ready
         if (this.isVoiceEnabled && data.audioBuffer) {
-          console.log(`🎯 INSTANT PLAY: Text and voice delivered together`);
-          this.playAudioBuffer(data.audioBuffer);
-        } else if (this.isVoiceEnabled) {
-          // Fallback for backward compatibility
-          this.speakRobResponse(data.response);
+          console.log(`🎯 SYNCHRONIZED DELIVERY: Preparing text and voice together`);
+          this.deliverSynchronizedResponse(data.response, data.audioBuffer);
+        } else {
+          // Regular text-only delivery
+          this.addMessage(data.response, 'rob');
+
+          if (this.isVoiceEnabled) {
+            // Fallback voice generation
+            this.speakRobResponse(data.response);
+          }
         }
 
         // Auto-play voice response if LISTEN is enabled
@@ -762,9 +768,68 @@ class RobAI {
     }
   }
 
-  playAudioBuffer(base64AudioData) {
+  async deliverSynchronizedResponse(text, audioBuffer) {
     try {
-      // Convert base64 to blob
+      console.log(`⚡ SYNC PREP: Preparing text and audio for simultaneous delivery`);
+
+      // Convert base64 to blob and prepare audio
+      const audioBytes = atob(audioBuffer);
+      const audioArray = new Uint8Array(audioBytes.length);
+      for (let i = 0; i < audioBytes.length; i++) {
+        audioArray[i] = audioBytes.charCodeAt(i);
+      }
+
+      const audioBlob = new Blob([audioArray], { type: 'audio/mpeg' });
+      const audioUrl = URL.createObjectURL(audioBlob);
+
+      // Create audio element but DON'T play yet
+      this.currentAudio = new Audio(audioUrl);
+
+      // Wait for audio to be fully loaded and ready
+      await new Promise((resolve, reject) => {
+        this.currentAudio.oncanplaythrough = () => {
+          console.log(`🎯 AUDIO READY: ${audioBlob.size} bytes loaded and ready`);
+          resolve();
+        };
+        this.currentAudio.onerror = reject;
+        this.currentAudio.load(); // Start loading
+      });
+
+      // Add visual feedback
+      if (this.voiceToggle) {
+        this.voiceToggle.style.background = 'linear-gradient(135deg, var(--success-color), var(--primary-color))';
+      }
+
+      // Set up audio event handlers
+      this.currentAudio.onended = () => {
+        this.cleanupAudio();
+        URL.revokeObjectURL(audioUrl);
+      };
+      this.currentAudio.onerror = () => {
+        console.error('Audio playback failed');
+        this.cleanupAudio();
+        URL.revokeObjectURL(audioUrl);
+      };
+
+      // 🎯 SYNCHRONIZED DROP: Display text AND start audio at EXACT same moment
+      console.log(`🚀 PERFECT SYNC: Dropping text and voice together NOW`);
+
+      this.addMessage(text, 'rob'); // Show text
+      this.currentAudio.play();     // Start audio
+
+      console.log(`✅ SYNCHRONIZED DELIVERY COMPLETE`);
+
+    } catch (error) {
+      console.error('❌ Synchronized delivery failed:', error);
+      // Fallback: show text immediately
+      this.addMessage(text, 'rob');
+      this.cleanupAudio();
+    }
+  }
+
+  playAudioBuffer(base64AudioData) {
+    // This method is now used for fallback cases only
+    try {
       const audioBytes = atob(base64AudioData);
       const audioArray = new Uint8Array(audioBytes.length);
       for (let i = 0; i < audioBytes.length; i++) {
@@ -783,7 +848,7 @@ class RobAI {
       this.currentAudio = new Audio(audioUrl);
       this.currentAudio.onended = () => {
         this.cleanupAudio();
-        URL.revokeObjectURL(audioUrl); // Clean up blob URL
+        URL.revokeObjectURL(audioUrl);
       };
       this.currentAudio.onerror = () => {
         console.error('Audio playback failed');
@@ -792,7 +857,7 @@ class RobAI {
       };
 
       this.currentAudio.play();
-      console.log(`🔊 SYNCHRONIZED AUDIO: Playing ${audioBlob.size} byte buffer`);
+      console.log(`🔊 FALLBACK AUDIO: Playing ${audioBlob.size} byte buffer`);
 
     } catch (error) {
       console.error('❌ Audio buffer playback error:', error);
