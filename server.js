@@ -282,18 +282,51 @@ app.post('/api/voice', async (req, res) => {
       });
     }
 
+    // Clean text for speech (remove markdown and HTML)
+    const cleanText = text
+      .replace(/<[^>]*>/g, '')                    // Remove HTML tags
+      .replace(/\*\*/g, '')                       // Remove bold markdown
+      .replace(/\*/g, '')                         // Remove italic markdown
+      .replace(/###|##|#/g, '')                   // Remove headers
+      .replace(/```[\s\S]*?```/g, '')             // Remove code blocks
+      .replace(/`([^`]+)`/g, '$1')                // Remove inline code
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')    // Remove links
+      .trim();
+
+    if (!cleanText) {
+      return res.status(400).json({
+        error: 'No valid text content for synthesis'
+      });
+    }
+
+    // Select premium male voice based on language
+    let selectedVoice, speed;
+
+    if (language === 'en') {
+      selectedVoice = 'onyx';  // Deep, authoritative male voice
+      speed = 1.0;             // Natural English pace
+    } else {
+      selectedVoice = 'echo';  // Clear, professional male voice
+      speed = 0.95;            // Slightly slower for Spanish clarity
+    }
+
+    // Use high-quality model for better results
     const speech = await openai.audio.speech.create({
-      model: "tts-1",
-      voice: "alloy",
-      input: text,
-      speed: 1.0
+      model: "tts-1-hd",      // High-quality model
+      voice: selectedVoice,
+      input: cleanText,
+      speed: speed
     });
 
     const buffer = Buffer.from(await speech.arrayBuffer());
 
+    // Set proper headers for audio streaming
     res.setHeader('Content-Type', 'audio/mpeg');
     res.setHeader('Content-Length', buffer.length);
+    res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
     res.send(buffer);
+
+    console.log(`🎙️ OpenAI TTS: ${selectedVoice} voice, ${language} language, ${cleanText.length} chars`);
 
   } catch (error) {
     console.error('Voice synthesis error:', error);

@@ -12,6 +12,7 @@ class RobAI {
     this.isRecording = false;
     this.mediaRecorder = null;
     this.audioChunks = [];
+    this.currentAudio = null; // For OpenAI TTS audio playback
 
     // Authentication state
     this.isAuthenticated = false;
@@ -657,134 +658,117 @@ class RobAI {
 
   // Removed playRobVoice - using enhanced speakRobResponse instead
 
-  speakWithPremiumVoice(text) {
+  async speakWithOpenAIVoice(text) {
+    try {
+      // Stop any current audio
+      this.stopCurrentSpeech();
+
+      // Add visual feedback that Rob is speaking
+      if (this.voiceToggle) {
+        this.voiceToggle.style.background = 'linear-gradient(135deg, var(--success-color), var(--primary-color))';
+      }
+
+      // Call backend OpenAI TTS API
+      const response = await fetch('/api/voice', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          text: text,
+          language: this.currentLanguage
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Voice API error: ${response.status}`);
+      }
+
+      // Get audio blob and play it
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+
+      // Create and play audio element
+      this.currentAudio = new Audio(audioUrl);
+      this.currentAudio.onended = () => {
+        this.cleanupAudio();
+      };
+      this.currentAudio.onerror = () => {
+        console.error('Audio playback failed');
+        this.cleanupAudio();
+      };
+
+      await this.currentAudio.play();
+      console.log(`🎙️ OpenAI TTS playing: ${this.currentLanguage} language`);
+
+    } catch (error) {
+      console.error('OpenAI voice synthesis error:', error);
+      this.cleanupAudio();
+
+      // Fallback to browser TTS if OpenAI fails
+      this.speakWithBrowserTTS(text);
+    }
+  }
+
+  speakWithBrowserTTS(text) {
     if (!('speechSynthesis' in window)) return;
 
-    // Stop any current speech
-    speechSynthesis.cancel();
-
     const utterance = new SpeechSynthesisUtterance(text);
-
-    // Set language
     utterance.lang = this.currentLanguage === 'en' ? 'en-US' : 'es-ES';
+    utterance.rate = 1.0;
+    utterance.pitch = 0.9;
+    utterance.volume = 0.9;
 
-    // Enhanced voice parameters for natural sound
-    utterance.rate = 1.0;        // Natural speaking speed
-    utterance.pitch = 0.9;       // Slightly lower pitch for authority
-    utterance.volume = 0.9;      // Clear volume
+    utterance.onend = () => this.cleanupAudio();
+    utterance.onerror = () => this.cleanupAudio();
 
-    // Get available voices
-    const voices = speechSynthesis.getVoices();
+    speechSynthesis.speak(utterance);
+    console.log('🎙️ Fallback: Using browser TTS');
+  }
 
-    if (this.currentLanguage === 'en') {
-      // Premium MALE English voices (in order of preference)
-      const preferredNames = [
-        'Alex',                    // macOS premium male voice
-        'Daniel',                  // UK male voice
-        'Microsoft David',         // Microsoft male voice
-        'Microsoft Mark',          // Microsoft male voice
-        'Fred',                    // US male voice
-        'Google US English Male',  // Google male voice
-        'Daniel (Enhanced)',       // Enhanced UK voice
-        'David',                   // Standard male voice
-        'Mark'                     // Standard male voice
-      ];
-
-      let selectedVoice = this.findBestVoice(voices, preferredNames, 'en');
-      if (selectedVoice) {
-        utterance.voice = selectedVoice;
-        utterance.rate = 1.1;      // Slightly faster for natural flow
-        utterance.pitch = 0.8;     // Lower pitch for masculine voice
-      }
-
-    } else {
-      // Premium MALE Spanish voices
-      const preferredNames = [
-        'Diego',                   // Premium male Spanish voice
-        'Jorge',                   // Latin American male Spanish
-        'Juan',                    // Male Spanish voice
-        'Carlos',                  // Male Spanish voice
-        'Microsoft Pablo',         // Microsoft male Spanish
-        'Google español',          // Google Spanish
-        'Microsoft Raul',          // Microsoft male Spanish
-        'Enrique'                  // Male Spanish voice
-      ];
-
-      let selectedVoice = this.findBestVoice(voices, preferredNames, 'es');
-      if (selectedVoice) {
-        utterance.voice = selectedVoice;
-        utterance.rate = 1.0;      // Natural Spanish pace
-        utterance.pitch = 0.8;     // Lower pitch for masculine voice
-      }
-    }
-
-    // Add speech events for better UX
-    utterance.onstart = () => {
-      console.log(`🔊 Speaking with ${utterance.voice ? utterance.voice.name : 'default'} voice`);
-      // Add visual feedback that Rob is speaking
-      this.voiceToggle.style.background = 'linear-gradient(135deg, var(--success-color), var(--primary-color))';
-    };
-
-    utterance.onend = () => {
-      // Reset visual feedback
+  cleanupAudio() {
+    // Reset visual feedback
+    if (this.voiceToggle) {
       if (this.isVoiceEnabled) {
         this.voiceToggle.style.background = 'linear-gradient(135deg, var(--primary-color), var(--secondary-color))';
-      }
-    };
-
-    utterance.onerror = (event) => {
-      console.error('Speech synthesis error:', event.error);
-    };
-
-    // Speak the text
-    speechSynthesis.speak(utterance);
-  }
-
-  findBestVoice(voices, preferredNames, language) {
-    // First, try to find exact name matches
-    for (const name of preferredNames) {
-      const voice = voices.find(v =>
-        v.name.includes(name) && v.lang.startsWith(language)
-      );
-      if (voice) {
-        console.log(`🎙️ Selected premium voice: ${voice.name}`);
-        return voice;
+      } else {
+        this.voiceToggle.style.background = '';
       }
     }
 
-    // Filter out female voices
-    const femaleKeywords = ['female', 'woman', 'girl', 'samantha', 'helena', 'sabina', 'zira', 'susan', 'catherine'];
-    const maleVoices = voices.filter(v =>
-      v.lang.startsWith(language) &&
-      !femaleKeywords.some(keyword => v.name.toLowerCase().includes(keyword))
-    );
-
-    // Prefer local/quality male voices
-    const qualityMaleVoices = maleVoices.filter(v =>
-      v.localService || v.name.includes('Google') || v.name.includes('Microsoft')
-    );
-
-    const selectedVoice = qualityMaleVoices[0] || maleVoices[0] || voices.find(v => v.lang.startsWith(language));
-
-    if (selectedVoice) {
-      console.log(`🎙️ Selected fallback voice: ${selectedVoice.name}`);
+    if (this.currentAudio) {
+      this.currentAudio.pause();
+      this.currentAudio = null;
     }
-
-    return selectedVoice;
   }
+
+  // Removed findBestVoice - now using OpenAI TTS with premium voices
 
   // Removed resetSpeakerButton - no longer needed
 
   stopCurrentSpeech() {
+    // Stop OpenAI audio if playing
+    if (this.currentAudio) {
+      this.currentAudio.pause();
+      this.currentAudio = null;
+    }
+
+    // Stop browser speech synthesis
     if ('speechSynthesis' in window) {
       speechSynthesis.cancel();
-      console.log('🔇 Speech stopped');
-
-      // Remove any visual feedback indicating speech is playing
-      if (this.voiceToggle) {
-        this.voiceToggle.classList.remove('speaking');
-      }
     }
+
+    // Reset visual feedback
+    if (this.voiceToggle) {
+      if (this.isVoiceEnabled) {
+        this.voiceToggle.style.background = 'linear-gradient(135deg, var(--primary-color), var(--secondary-color))';
+      } else {
+        this.voiceToggle.style.background = '';
+      }
+      this.voiceToggle.classList.remove('speaking');
+    }
+
+    console.log('🔇 All speech stopped');
   }
 
   async speakRobResponse(text) {
@@ -801,8 +785,8 @@ class RobAI {
 
     if (!cleanText) return;
 
-    // Use enhanced browser TTS with premium voice selection
-    this.speakWithPremiumVoice(cleanText);
+    // Use high-quality OpenAI TTS
+    this.speakWithOpenAIVoice(cleanText);
   }
 
   async deleteUserData() {
