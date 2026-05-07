@@ -532,9 +532,9 @@ class RobAI {
         // Add Rob's response
         this.addMessage(data.response, 'rob');
 
-        // Play voice response if enabled
+        // Auto-play voice response if LISTEN is enabled
         if (this.isVoiceEnabled) {
-          this.speakResponse(data.response);
+          this.speakRobResponse(data.response);
         }
 
       } else {
@@ -565,21 +565,7 @@ class RobAI {
       const formattedText = this.formatRobResponse(text);
       contentDiv.innerHTML = formattedText;
 
-      // Add speaker button for Rob's messages
-      const speakerBtn = document.createElement('button');
-      speakerBtn.className = 'speaker-btn';
-      speakerBtn.innerHTML = `
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M3 10V14H7L12 19V5L7 10H3ZM16.5 12C16.5 10.23 15.5 8.71 14 7.97V16.02C15.5 15.29 16.5 13.77 16.5 12ZM14 3.23V5.29C16.89 6.15 19 8.83 19 12C19 15.17 16.89 17.85 14 18.71V20.77C18.01 19.86 21 16.28 21 12C21 7.72 18.01 4.14 14 3.23Z"/>
-        </svg>
-      `;
-      speakerBtn.title = this.currentLanguage === 'en' ? 'Play voice' : 'Reproducir voz';
-
-      speakerBtn.addEventListener('click', () => {
-        this.playRobVoice(text, speakerBtn);
-      });
-
-      contentDiv.appendChild(speakerBtn);
+      // Speaker removed - using LISTEN button for voice control
     } else {
       contentDiv.textContent = text;
     }
@@ -617,114 +603,121 @@ class RobAI {
     }, 100);
   }
 
-  async playRobVoice(text, button) {
-    // Show loading state
-    button.disabled = true;
-    button.innerHTML = `
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M12,4V2A10,10 0 0,0 2,12H4A8,8 0 0,1 12,4Z">
-          <animateTransform attributeName="transform" type="rotate" dur="1s" repeatCount="indefinite" values="0 12 12;360 12 12"/>
-        </path>
-      </svg>
-    `;
+  // Removed playRobVoice - using enhanced speakRobResponse instead
 
-    try {
-      // Clean text for voice synthesis (remove HTML tags)
-      const cleanText = text.replace(/<[^>]*>/g, '').replace(/\*\*/g, '').trim();
+  speakWithPremiumVoice(text) {
+    if (!('speechSynthesis' in window)) return;
 
-      // Use OpenAI voice API with language-specific voice
-      const response = await fetch('/api/voice', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          text: cleanText,
-          language: this.currentLanguage,
-          voice: this.currentLanguage === 'en' ? 'onyx' : 'alloy', // Strong male voice for English, clear for Spanish
-          model: 'tts-1'
-        })
-      });
+    // Stop any current speech
+    speechSynthesis.cancel();
 
-      if (response.ok) {
-        const audioBlob = await response.blob();
-        const audioUrl = URL.createObjectURL(audioBlob);
-        const audio = new Audio(audioUrl);
+    const utterance = new SpeechSynthesisUtterance(text);
 
-        audio.play().then(() => {
-          console.log('OpenAI voice playback started');
-        }).catch(error => {
-          console.error('Audio playback failed:', error);
-          this.fallbackToWebSpeech(cleanText);
-        });
+    // Set language
+    utterance.lang = this.currentLanguage === 'en' ? 'en-US' : 'es-ES';
 
-        audio.onended = () => {
-          URL.revokeObjectURL(audioUrl);
-          this.resetSpeakerButton(button);
-        };
+    // Enhanced voice parameters for natural sound
+    utterance.rate = 1.0;        // Natural speaking speed
+    utterance.pitch = 0.9;       // Slightly lower pitch for authority
+    utterance.volume = 0.9;      // Clear volume
 
-        audio.onerror = () => {
-          console.error('Audio error, falling back to web speech');
-          this.fallbackToWebSpeech(cleanText);
-          this.resetSpeakerButton(button);
-        };
-      } else {
-        console.log('OpenAI API not available, using web speech');
-        this.fallbackToWebSpeech(cleanText);
-        this.resetSpeakerButton(button);
+    // Get available voices
+    const voices = speechSynthesis.getVoices();
+
+    if (this.currentLanguage === 'en') {
+      // Premium English voices (in order of preference)
+      const preferredNames = [
+        'Alex',                    // macOS premium voice
+        'Daniel',                  // UK voice
+        'Fred',                    // US voice
+        'Samantha',                // Female backup
+        'Google US English',       // Google voice
+        'Microsoft David',         // Microsoft voice
+        'Microsoft Mark'           // Microsoft voice
+      ];
+
+      let selectedVoice = this.findBestVoice(voices, preferredNames, 'en');
+      if (selectedVoice) {
+        utterance.voice = selectedVoice;
+        utterance.rate = 0.95;     // Slightly slower for clarity
       }
-    } catch (error) {
-      console.error('Voice synthesis failed:', error);
-      this.fallbackToWebSpeech(cleanText);
-      this.resetSpeakerButton(button);
+
+    } else {
+      // Premium Spanish voices
+      const preferredNames = [
+        'Diego',                   // Premium Spanish voice
+        'Jorge',                   // Latin American Spanish
+        'Juan',                    // Spanish voice
+        'Google español',          // Google Spanish
+        'Microsoft Helena',        // Microsoft Spanish
+        'Microsoft Sabina'         // Microsoft Spanish
+      ];
+
+      let selectedVoice = this.findBestVoice(voices, preferredNames, 'es');
+      if (selectedVoice) {
+        utterance.voice = selectedVoice;
+        utterance.rate = 0.9;      // Natural Spanish pace
+      }
     }
+
+    // Add speech events for better UX
+    utterance.onstart = () => {
+      console.log(`🔊 Speaking with ${utterance.voice ? utterance.voice.name : 'default'} voice`);
+      // Add visual feedback that Rob is speaking
+      this.voiceToggle.style.background = 'linear-gradient(135deg, var(--success-color), var(--primary-color))';
+    };
+
+    utterance.onend = () => {
+      // Reset visual feedback
+      if (this.isVoiceEnabled) {
+        this.voiceToggle.style.background = 'linear-gradient(135deg, var(--primary-color), var(--secondary-color))';
+      }
+    };
+
+    utterance.onerror = (event) => {
+      console.error('Speech synthesis error:', event.error);
+    };
+
+    // Speak the text
+    speechSynthesis.speak(utterance);
   }
 
-  fallbackToWebSpeech(text) {
-    if ('speechSynthesis' in window) {
-      // Clean text for speech synthesis
-      const cleanText = text.replace(/<[^>]*>/g, '').replace(/\*\*/g, '');
-
-      const utterance = new SpeechSynthesisUtterance(cleanText);
-      utterance.lang = this.currentLanguage === 'en' ? 'en-US' : 'es-ES';
-      utterance.rate = 0.9;
-      utterance.pitch = 0.8;
-
-      // Try to use a male voice
-      const voices = speechSynthesis.getVoices();
-      const preferredVoice = voices.find(voice =>
-        voice.lang.startsWith(this.currentLanguage) &&
-        (voice.name.includes('Male') || voice.name.includes('David') || voice.name.includes('Alex'))
+  findBestVoice(voices, preferredNames, language) {
+    // First, try to find exact name matches
+    for (const name of preferredNames) {
+      const voice = voices.find(v =>
+        v.name.includes(name) && v.lang.startsWith(language)
       );
-
-      if (preferredVoice) {
-        utterance.voice = preferredVoice;
-      }
-
-      speechSynthesis.speak(utterance);
+      if (voice) return voice;
     }
+
+    // Fallback: find any quality voice for the language
+    const qualityVoices = voices.filter(v =>
+      v.lang.startsWith(language) &&
+      (v.localService || v.name.includes('Google') || v.name.includes('Microsoft'))
+    );
+
+    return qualityVoices[0] || voices.find(v => v.lang.startsWith(language));
   }
 
-  resetSpeakerButton(button) {
-    button.disabled = false;
-    button.innerHTML = `
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M3 10V14H7L12 19V5L7 10H3ZM16.5 12C16.5 10.23 15.5 8.71 14 7.97V16.02C15.5 15.29 16.5 13.77 16.5 12ZM14 3.23V5.29C16.89 6.15 19 8.83 19 12C19 15.17 16.89 17.85 14 18.71V20.77C18.01 19.86 21 16.28 21 12C21 7.72 18.01 4.14 14 3.23Z"/>
-      </svg>
-    `;
-  }
+  // Removed resetSpeakerButton - no longer needed
 
-  async speakResponse(text) {
-    try {
-      const response = await fetch('/api/voice', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          text: text,
-          language: this.currentLanguage
-        })
+  async speakRobResponse(text) {
+    // Clean text for speech (remove markdown and HTML)
+    const cleanText = text
+      .replace(/<[^>]*>/g, '')                    // Remove HTML tags
+      .replace(/\*\*/g, '')                       // Remove bold markdown
+      .replace(/\*/g, '')                         // Remove italic markdown
+      .replace(/###|##|#/g, '')                   // Remove headers
+      .replace(/```[\s\S]*?```/g, '')             // Remove code blocks
+      .replace(/`([^`]+)`/g, '$1')                // Remove inline code
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')    // Remove links
+      .trim();
+
+    if (!cleanText) return;
+
+    // Use enhanced browser TTS with premium voice selection
+    this.speakWithPremiumVoice(cleanText);
       });
 
       if (response.ok) {
