@@ -547,15 +547,9 @@ class RobAI {
     const message = this.messageInput.value.trim();
     if (!message) return;
 
-    // Stop any current speech and disable voice responses when user sends message
+    // Stop any current speech when user sends message (but keep voice enabled)
     this.stopCurrentSpeech();
-
-    // Turn off the voice toggle/LISTEN button
-    if (this.isVoiceEnabled) {
-      this.isVoiceEnabled = false;
-      this.voiceToggle.classList.remove('active');
-      console.log('🔇 Voice disabled - user sending new message');
-    }
+    console.log('🔇 Stopped current speech - sending new message');
 
     // Add user message to chat
     this.addMessage(message, 'user');
