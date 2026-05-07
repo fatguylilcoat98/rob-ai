@@ -77,6 +77,18 @@ class RobAI {
       this.messageInput.placeholder = 'Escribe tu pregunta aquí...';
       this.langToggle.textContent = 'ES';
     }
+
+    // Update voice recognition language if currently recording
+    if (this.recognition && this.isRecording) {
+      console.log(`Switching speech recognition to ${lang}`);
+      this.stopSpeechRecognition();
+      // Small delay to ensure proper restart
+      setTimeout(() => {
+        this.startSpeechRecognition();
+      }, 100);
+    }
+
+    console.log(`Language switched to ${lang}, voice will use ${lang === 'en' ? 'en-US' : 'es-ES'}`);
   }
 
   setupEventListeners() {
@@ -188,6 +200,8 @@ class RobAI {
     this.recognition = new SpeechRecognition();
     this.recognition.continuous = true;
     this.recognition.interimResults = true;
+
+    // Set language based on current UI language - seamless switching
     this.recognition.lang = this.currentLanguage === 'en' ? 'en-US' : 'es-ES';
 
     let finalTranscript = '';
@@ -195,6 +209,7 @@ class RobAI {
     this.recognition.onstart = () => {
       this.isRecording = true;
       this.voiceInputBtn.classList.add('recording');
+      console.log(`Speech recognition started in ${this.recognition.lang}`);
     };
 
     this.recognition.onresult = (event) => {
@@ -219,17 +234,31 @@ class RobAI {
     this.recognition.onerror = (event) => {
       console.error('Speech recognition error:', event.error);
       this.stopSpeechRecognition();
-      this.showError(
-        this.currentLanguage === 'en'
+
+      // More specific error messages
+      let errorMessage;
+      if (event.error === 'not-allowed') {
+        errorMessage = this.currentLanguage === 'en'
+          ? 'Microphone access denied. Please allow microphone access.'
+          : 'Acceso al micrófono denegado. Por favor permite el acceso al micrófono.';
+      } else {
+        errorMessage = this.currentLanguage === 'en'
           ? 'Speech recognition error. Please try again.'
-          : 'Error de reconocimiento de voz. Intenta de nuevo.'
-      );
+          : 'Error de reconocimiento de voz. Intenta de nuevo.';
+      }
+      this.showError(errorMessage);
     };
 
     this.recognition.onend = () => {
       if (this.isRecording) {
-        // Recognition ended unexpectedly, restart it
-        this.recognition.start();
+        // Recognition ended unexpectedly, restart with current language
+        this.recognition.lang = this.currentLanguage === 'en' ? 'en-US' : 'es-ES';
+        try {
+          this.recognition.start();
+        } catch (error) {
+          console.error('Failed to restart recognition:', error);
+          this.stopSpeechRecognition();
+        }
       }
     };
 
@@ -328,7 +357,7 @@ class RobAI {
       const speakerBtn = document.createElement('button');
       speakerBtn.className = 'speaker-btn';
       speakerBtn.innerHTML = `
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
           <path d="M3 10V14H7L12 19V5L7 10H3ZM16.5 12C16.5 10.23 15.5 8.71 14 7.97V16.02C15.5 15.29 16.5 13.77 16.5 12ZM14 3.23V5.29C16.89 6.15 19 8.83 19 12C19 15.17 16.89 17.85 14 18.71V20.77C18.01 19.86 21 16.28 21 12C21 7.72 18.01 4.14 14 3.23Z"/>
         </svg>
       `;
@@ -380,7 +409,7 @@ class RobAI {
     // Show loading state
     button.disabled = true;
     button.innerHTML = `
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
         <path d="M12,4V2A10,10 0 0,0 2,12H4A8,8 0 0,1 12,4Z">
           <animateTransform attributeName="transform" type="rotate" dur="1s" repeatCount="indefinite" values="0 12 12;360 12 12"/>
         </path>
@@ -388,15 +417,20 @@ class RobAI {
     `;
 
     try {
-      // Try OpenAI API first
+      // Clean text for voice synthesis (remove HTML tags)
+      const cleanText = text.replace(/<[^>]*>/g, '').replace(/\*\*/g, '').trim();
+
+      // Use OpenAI voice API with language-specific voice
       const response = await fetch('/api/voice', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          text: text,
-          language: this.currentLanguage
+          text: cleanText,
+          language: this.currentLanguage,
+          voice: this.currentLanguage === 'en' ? 'onyx' : 'alloy', // Strong male voice for English, clear for Spanish
+          model: 'tts-1'
         })
       });
 
@@ -405,9 +439,11 @@ class RobAI {
         const audioUrl = URL.createObjectURL(audioBlob);
         const audio = new Audio(audioUrl);
 
-        audio.play().catch(error => {
+        audio.play().then(() => {
+          console.log('OpenAI voice playback started');
+        }).catch(error => {
           console.error('Audio playback failed:', error);
-          this.fallbackToWebSpeech(text);
+          this.fallbackToWebSpeech(cleanText);
         });
 
         audio.onended = () => {
@@ -416,18 +452,18 @@ class RobAI {
         };
 
         audio.onerror = () => {
-          this.fallbackToWebSpeech(text);
+          console.error('Audio error, falling back to web speech');
+          this.fallbackToWebSpeech(cleanText);
           this.resetSpeakerButton(button);
         };
       } else {
-        // Fallback to Web Speech API
-        this.fallbackToWebSpeech(text);
+        console.log('OpenAI API not available, using web speech');
+        this.fallbackToWebSpeech(cleanText);
         this.resetSpeakerButton(button);
       }
     } catch (error) {
       console.error('Voice synthesis failed:', error);
-      // Fallback to Web Speech API
-      this.fallbackToWebSpeech(text);
+      this.fallbackToWebSpeech(cleanText);
       this.resetSpeakerButton(button);
     }
   }
@@ -460,7 +496,7 @@ class RobAI {
   resetSpeakerButton(button) {
     button.disabled = false;
     button.innerHTML = `
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
         <path d="M3 10V14H7L12 19V5L7 10H3ZM16.5 12C16.5 10.23 15.5 8.71 14 7.97V16.02C15.5 15.29 16.5 13.77 16.5 12ZM14 3.23V5.29C16.89 6.15 19 8.83 19 12C19 15.17 16.89 17.85 14 18.71V20.77C18.01 19.86 21 16.28 21 12C21 7.72 18.01 4.14 14 3.23Z"/>
       </svg>
     `;
