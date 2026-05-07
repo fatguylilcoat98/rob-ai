@@ -547,9 +547,18 @@ class RobAI {
     const message = this.messageInput.value.trim();
     if (!message) return;
 
-    // Stop any current speech when user sends message (but keep voice enabled)
+    // Capture voice state before turning it off
+    const voiceWasEnabled = this.isVoiceEnabled;
+
+    // Stop current speech and turn off LISTEN button immediately
     this.stopCurrentSpeech();
-    console.log('🔇 Stopped current speech - sending new message');
+    if (this.isVoiceEnabled) {
+      this.isVoiceEnabled = false;
+      if (this.voiceToggle) {
+        this.voiceToggle.classList.remove('active');
+      }
+      console.log('🔇 LISTEN button turned OFF - user sent message');
+    }
 
     // Add user message to chat
     this.addMessage(message, 'user');
@@ -564,9 +573,9 @@ class RobAI {
     this.showTyping();
 
     try {
-      // Use the fast synchronized endpoint if voice is enabled
-      const endpoint = this.isVoiceEnabled ? '/api/chat-with-voice' : '/api/chat';
-      console.log(`🚀 Using ${endpoint} for ${this.isVoiceEnabled ? 'synchronized' : 'text-only'} response`);
+      // Use the fast synchronized endpoint if voice WAS enabled when sending
+      const endpoint = voiceWasEnabled ? '/api/chat-with-voice' : '/api/chat';
+      console.log(`🚀 Using ${endpoint} for ${voiceWasEnabled ? 'synchronized' : 'text-only'} response`);
 
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -591,22 +600,16 @@ class RobAI {
         this.hideTyping();
 
         // Check voice state at delivery time
-        console.log(`🔊 Voice state at delivery: isVoiceEnabled=${this.isVoiceEnabled}, hasAudioBuffer=${!!data.audioBuffer}`);
+        console.log(`🔊 Voice state at delivery: voiceWasEnabled=${voiceWasEnabled}, hasAudioBuffer=${!!data.audioBuffer}`);
 
-        // SYNCHRONIZED DELIVERY: Hold text until voice is ready
-        if (this.isVoiceEnabled && data.audioBuffer) {
-          console.log(`🎯 USING SYNCHRONIZED DELIVERY`);
+        // SYNCHRONIZED DELIVERY: Use voice if it WAS enabled when message was sent
+        if (voiceWasEnabled && data.audioBuffer) {
+          console.log(`🎯 USING SYNCHRONIZED DELIVERY (voice was enabled when sent)`);
           await this.deliverSynchronizedResponse(data.response, data.audioBuffer);
         } else {
           console.log(`📝 USING REGULAR TEXT DELIVERY`);
           // Regular text-only delivery
           this.addMessage(data.response, 'rob');
-
-          if (this.isVoiceEnabled) {
-            // Fallback voice generation
-            console.log(`🔄 Using fallback voice generation`);
-            this.speakRobResponse(data.response);
-          }
         }
 
         // Auto-play voice response if LISTEN is enabled
