@@ -1,5 +1,5 @@
 /*
- * Rob AI - Direct AI Assistant for Business Strategy
+ * Rob-AI - Direct AI Assistant for Business Strategy
  * Built for José - LinkedIn Content & Monetization Expert
  * No applause. Just results.
  */
@@ -374,7 +374,7 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'OK',
     timestamp: new Date().toISOString(),
-    service: 'Rob AI Assistant'
+    service: 'Rob-AI Assistant'
   });
 });
 
@@ -384,6 +384,6 @@ app.get('*', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🤖 Rob AI Assistant running on port ${PORT}`);
+  console.log(`🤖 Rob-AI Assistant running on port ${PORT}`);
   console.log(`📊 Ready to help José create results, not applause`);
 });

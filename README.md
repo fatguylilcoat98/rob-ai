@@ -1,4 +1,4 @@
-# 🤖 Rob AI - Direct Business Strategy Assistant
+# 🤖 Rob-AI - Direct Business Strategy Assistant
 
 **No applause. Just results.**
 

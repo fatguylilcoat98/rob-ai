@@ -1,5 +1,5 @@
 /*
- * Rob AI - Frontend Application
+ * Rob-AI - Frontend Application
  * Direct assistant for business strategy and LinkedIn content
  * No applause. Just results.
  */

@@ -1,7 +1,7 @@
 services:
   - type: web
     name: rob-ai-assistant
-    displayName: "Rob AI - Direct Business Strategy Assistant"
+    displayName: "Rob-AI - Direct Business Strategy Assistant"
     env: node
     plan: starter
     region: oregon

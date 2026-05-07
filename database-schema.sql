@@ -1,5 +1,5 @@
 /*
- * Rob AI - Database Schema
+ * Rob-AI - Database Schema
  * Encrypted conversation storage with privacy-first design
  * Built for José's LinkedIn Content & Business Strategy Assistant
  */
