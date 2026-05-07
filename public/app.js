@@ -7,7 +7,7 @@
 class RobAI {
   constructor() {
     this.userId = this.getUserId();
-    this.currentLanguage = 'es'; // Default to Spanish
+    this.currentLanguage = 'en'; // Default to English
     this.isVoiceEnabled = false;
     this.isRecording = false;
     this.mediaRecorder = null;
@@ -132,7 +132,7 @@ class RobAI {
     if (browserLang.startsWith('en')) {
       this.setLanguage('en');
     } else {
-      this.setLanguage('es'); // Default to Spanish
+      this.setLanguage('en'); // Default to English
     }
   }
 
@@ -342,6 +342,11 @@ class RobAI {
 
         if (this.isVoiceEnabled) {
           this.requestMicrophonePermission();
+          console.log('🔊 Voice responses enabled');
+        } else {
+          // Stop any current speech when disabling
+          this.stopCurrentSpeech();
+          console.log('🔇 Voice responses disabled - stopping current speech');
         }
       });
     }
@@ -670,38 +675,44 @@ class RobAI {
     const voices = speechSynthesis.getVoices();
 
     if (this.currentLanguage === 'en') {
-      // Premium English voices (in order of preference)
+      // Premium MALE English voices (in order of preference)
       const preferredNames = [
-        'Alex',                    // macOS premium voice
-        'Daniel',                  // UK voice
-        'Fred',                    // US voice
-        'Samantha',                // Female backup
-        'Google US English',       // Google voice
-        'Microsoft David',         // Microsoft voice
-        'Microsoft Mark'           // Microsoft voice
+        'Alex',                    // macOS premium male voice
+        'Daniel',                  // UK male voice
+        'Microsoft David',         // Microsoft male voice
+        'Microsoft Mark',          // Microsoft male voice
+        'Fred',                    // US male voice
+        'Google US English Male',  // Google male voice
+        'Daniel (Enhanced)',       // Enhanced UK voice
+        'David',                   // Standard male voice
+        'Mark'                     // Standard male voice
       ];
 
       let selectedVoice = this.findBestVoice(voices, preferredNames, 'en');
       if (selectedVoice) {
         utterance.voice = selectedVoice;
-        utterance.rate = 0.95;     // Slightly slower for clarity
+        utterance.rate = 1.1;      // Slightly faster for natural flow
+        utterance.pitch = 0.8;     // Lower pitch for masculine voice
       }
 
     } else {
-      // Premium Spanish voices
+      // Premium MALE Spanish voices
       const preferredNames = [
-        'Diego',                   // Premium Spanish voice
-        'Jorge',                   // Latin American Spanish
-        'Juan',                    // Spanish voice
+        'Diego',                   // Premium male Spanish voice
+        'Jorge',                   // Latin American male Spanish
+        'Juan',                    // Male Spanish voice
+        'Carlos',                  // Male Spanish voice
+        'Microsoft Pablo',         // Microsoft male Spanish
         'Google español',          // Google Spanish
-        'Microsoft Helena',        // Microsoft Spanish
-        'Microsoft Sabina'         // Microsoft Spanish
+        'Microsoft Raul',          // Microsoft male Spanish
+        'Enrique'                  // Male Spanish voice
       ];
 
       let selectedVoice = this.findBestVoice(voices, preferredNames, 'es');
       if (selectedVoice) {
         utterance.voice = selectedVoice;
-        utterance.rate = 0.9;      // Natural Spanish pace
+        utterance.rate = 1.0;      // Natural Spanish pace
+        utterance.pitch = 0.8;     // Lower pitch for masculine voice
       }
     }
 
@@ -733,19 +744,46 @@ class RobAI {
       const voice = voices.find(v =>
         v.name.includes(name) && v.lang.startsWith(language)
       );
-      if (voice) return voice;
+      if (voice) {
+        console.log(`🎙️ Selected premium voice: ${voice.name}`);
+        return voice;
+      }
     }
 
-    // Fallback: find any quality voice for the language
-    const qualityVoices = voices.filter(v =>
+    // Filter out female voices
+    const femaleKeywords = ['female', 'woman', 'girl', 'samantha', 'helena', 'sabina', 'zira', 'susan', 'catherine'];
+    const maleVoices = voices.filter(v =>
       v.lang.startsWith(language) &&
-      (v.localService || v.name.includes('Google') || v.name.includes('Microsoft'))
+      !femaleKeywords.some(keyword => v.name.toLowerCase().includes(keyword))
     );
 
-    return qualityVoices[0] || voices.find(v => v.lang.startsWith(language));
+    // Prefer local/quality male voices
+    const qualityMaleVoices = maleVoices.filter(v =>
+      v.localService || v.name.includes('Google') || v.name.includes('Microsoft')
+    );
+
+    const selectedVoice = qualityMaleVoices[0] || maleVoices[0] || voices.find(v => v.lang.startsWith(language));
+
+    if (selectedVoice) {
+      console.log(`🎙️ Selected fallback voice: ${selectedVoice.name}`);
+    }
+
+    return selectedVoice;
   }
 
   // Removed resetSpeakerButton - no longer needed
+
+  stopCurrentSpeech() {
+    if ('speechSynthesis' in window) {
+      speechSynthesis.cancel();
+      console.log('🔇 Speech stopped');
+
+      // Remove any visual feedback indicating speech is playing
+      if (this.voiceToggle) {
+        this.voiceToggle.classList.remove('speaking');
+      }
+    }
+  }
 
   async speakRobResponse(text) {
     // Clean text for speech (remove markdown and HTML)
