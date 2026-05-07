@@ -59,6 +59,11 @@
 
         <!-- Chat Area -->
         <main class="chat-container">
+            <!-- Background Rob Avatar -->
+            <div class="chat-background-avatar">
+                <div class="bg-avatar-core">R</div>
+                <div class="bg-energy-ring"></div>
+            </div>
             <div class="chat-messages" id="chatMessages">
                 <!-- Welcome Message -->
                 <div class="message rob-message">
@@ -116,14 +121,12 @@
                         <span class="char-count" id="charCount">0/1000</span>
                         <div class="voice-controls">
                             <button type="button" id="voiceInputBtn" class="voice-input-btn" title="Hablar / Speak">
-                                <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-                                    <path d="M12 2C13.1 2 14 2.9 14 4V10C14 11.1 13.1 12 12 12C10.9 12 10 11.1 10 10V4C10 2.9 10.9 2 12 2Z"/>
-                                </svg>
+                                <span class="btn-text-es">HABLAR</span>
+                                <span class="btn-text-en" style="display: none;">SPEAK</span>
                             </button>
                             <button type="button" id="voiceToggle" class="voice-toggle" title="Activar respuestas de voz / Enable voice responses">
-                                <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-                                    <path d="M3 10V14H7L12 19V5L7 10H3ZM16.5 12C16.5 10.23 15.5 8.71 14 7.97V16.02C15.5 15.29 16.5 13.77 16.5 12Z"/>
-                                </svg>
+                                <span class="btn-text-es">ESCUCHAR</span>
+                                <span class="btn-text-en" style="display: none;">LISTEN</span>
                             </button>
                         </div>
                     </div>

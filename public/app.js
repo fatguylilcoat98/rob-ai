@@ -78,6 +78,18 @@ class RobAI {
       this.langToggle.textContent = 'ES';
     }
 
+    // Update voice button text visibility
+    const esTexts = document.querySelectorAll('.btn-text-es');
+    const enTexts = document.querySelectorAll('.btn-text-en');
+
+    if (lang === 'en') {
+      esTexts.forEach(el => el.style.display = 'none');
+      enTexts.forEach(el => el.style.display = 'inline');
+    } else {
+      esTexts.forEach(el => el.style.display = 'inline');
+      enTexts.forEach(el => el.style.display = 'none');
+    }
+
     // Update voice recognition language if currently recording
     if (this.recognition && this.isRecording) {
       console.log(`Switching speech recognition to ${lang}`);

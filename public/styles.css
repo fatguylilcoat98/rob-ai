@@ -4,6 +4,83 @@
  * Mobile-first design for José's audience
  */
 
+/* Chat Background Avatar - Transparent Rob */
+.chat-background-avatar {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 200px;
+  height: 200px;
+  opacity: 0.03;
+  pointer-events: none;
+  z-index: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bg-avatar-core {
+  position: relative;
+  width: 160px;
+  height: 160px;
+  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Inter', sans-serif;
+  font-weight: 800;
+  font-size: 80px;
+  color: var(--text-primary);
+  text-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+}
+
+.bg-energy-ring {
+  position: absolute;
+  top: -20px;
+  left: -20px;
+  width: 200px;
+  height: 200px;
+  border: 2px solid var(--primary-color);
+  border-radius: 50%;
+  opacity: 0.5;
+  animation: energyPulse 3s ease-in-out infinite;
+}
+
+@keyframes energyPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.3;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.6;
+  }
+}
+
+/* Mobile Background Avatar */
+@media (max-width: 768px) {
+  .chat-background-avatar {
+    width: 150px;
+    height: 150px;
+    opacity: 0.02;
+  }
+
+  .bg-avatar-core {
+    width: 120px;
+    height: 120px;
+    font-size: 60px;
+  }
+
+  .bg-energy-ring {
+    top: -15px;
+    left: -15px;
+    width: 150px;
+    height: 150px;
+  }
+}
+
 :root {
   /* Futuristic Color Palette - Inspired by Rob Avatar */
   --primary-color: #00d4ff;
@@ -709,51 +786,112 @@ body::before {
 
 .voice-input-btn,
 .input-controls .voice-toggle {
-  background: none;
-  border: 1px solid transparent;
-  color: var(--text-muted);
+  background: var(--glass-bg);
+  border: 2px solid var(--glass-border);
+  color: var(--text-secondary);
   cursor: pointer;
-  padding: var(--spacing-sm);
-  border-radius: 8px;
+  padding: 14px 24px;
+  border-radius: 12px;
   transition: all 0.3s ease;
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 40px;
-  height: 40px;
+  font-family: 'Inter', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  min-width: 100px;
+  height: 52px;
+  backdrop-filter: blur(10px);
+  box-shadow: var(--shadow-sm);
 }
 
-.voice-input-btn svg,
-.input-controls .voice-toggle svg {
-  width: 22px;
-  height: 22px;
+/* Text content for voice buttons */
+.voice-input-btn .btn-text-es,
+.voice-input-btn .btn-text-en,
+.voice-toggle .btn-text-es,
+.voice-toggle .btn-text-en {
+  white-space: nowrap;
 }
 
 .voice-input-btn:hover,
 .input-controls .voice-toggle:hover {
   color: var(--primary-color);
-  background: var(--glass-bg);
-  border-color: var(--glass-border);
-  transform: scale(1.05);
+  background: var(--glass-hover);
+  border-color: var(--primary-color);
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
 }
 
 .voice-input-btn.recording {
-  color: var(--accent-color);
-  background: rgba(255, 107, 0, 0.1);
+  color: var(--text-primary);
+  background: linear-gradient(135deg, var(--accent-color), #ff8533);
   border-color: var(--accent-color);
   animation: pulse 1s infinite;
+  box-shadow: 0 0 20px rgba(255, 107, 0, 0.4);
+  font-weight: 900;
 }
 
 .input-controls .voice-toggle.active {
-  background: var(--primary-color);
-  color: white;
+  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+  color: var(--text-primary);
   border-color: var(--primary-color);
-  box-shadow: 0 0 10px rgba(0, 212, 255, 0.4);
+  box-shadow: var(--shadow-tactical);
+  font-weight: 900;
 }
 
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.6; }
+}
+
+/* Enhanced Mobile Voice Controls - Large and Easy to Tap */
+@media (max-width: 768px) {
+  .voice-input-btn,
+  .input-controls .voice-toggle {
+    min-width: 120px;
+    height: 60px;
+    font-size: 16px;
+    padding: 18px 28px;
+    font-weight: 800;
+  }
+
+  .voice-controls {
+    gap: 16px;
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .input-controls {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .char-count {
+    order: 2;
+    text-align: center;
+  }
+
+  .voice-controls {
+    order: 1;
+  }
+}
+
+/* Extra Large Buttons for Small Phones */
+@media (max-width: 480px) {
+  .voice-input-btn,
+  .input-controls .voice-toggle {
+    min-width: 140px;
+    height: 70px;
+    font-size: 18px;
+    font-weight: 900;
+    letter-spacing: 1px;
+  }
+
+  .voice-controls {
+    gap: 20px;
+  }
 }
 
 /* Responsive Design */
