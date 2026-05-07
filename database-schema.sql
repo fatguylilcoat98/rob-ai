@@ -14,12 +14,7 @@ CREATE TABLE IF NOT EXISTS conversations (
   message_encrypted jsonb NOT NULL, -- {iv, encrypted, authTag}
   response_encrypted jsonb NOT NULL, -- {iv, encrypted, authTag}
   language varchar(2) DEFAULT 'es' CHECK (language IN ('es', 'en')),
-  created_at timestamptz DEFAULT now(),
-
-  -- Index for performance
-  INDEX CONCURRENTLY IF NOT EXISTS idx_conversations_user_id ON conversations(user_id),
-  INDEX CONCURRENTLY IF NOT EXISTS idx_conversations_created_at ON conversations(created_at),
-  INDEX CONCURRENTLY IF NOT EXISTS idx_conversations_user_date ON conversations(user_id, created_at)
+  created_at timestamptz DEFAULT now()
 );
 
 -- User analytics (non-PII only)
@@ -51,9 +46,7 @@ CREATE TABLE IF NOT EXISTS content_templates (
   usage_count integer DEFAULT 0,
   effectiveness_score decimal(3,2) DEFAULT 0.0,
   created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now(),
-
-  INDEX CONCURRENTLY IF NOT EXISTS idx_templates_type_lang ON content_templates(template_type, language)
+  updated_at timestamptz DEFAULT now()
 );
 
 -- Rob's knowledge base (for José's business context)
@@ -64,12 +57,17 @@ CREATE TABLE IF NOT EXISTS knowledge_base (
   language varchar(2) NOT NULL CHECK (language IN ('es', 'en')),
   tags text[] DEFAULT '{}',
   priority integer DEFAULT 1 CHECK (priority >= 1 AND priority <= 10),
-  last_updated timestamptz DEFAULT now(),
-
-  INDEX CONCURRENTLY IF NOT EXISTS idx_knowledge_topic ON knowledge_base(topic),
-  INDEX CONCURRENTLY IF NOT EXISTS idx_knowledge_tags ON knowledge_base USING gin(tags),
-  INDEX CONCURRENTLY IF NOT EXISTS idx_knowledge_priority ON knowledge_base(priority)
+  last_updated timestamptz DEFAULT now()
 );
+
+-- Create indexes for performance (separate from table definitions)
+CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id);
+CREATE INDEX IF NOT EXISTS idx_conversations_created_at ON conversations(created_at);
+CREATE INDEX IF NOT EXISTS idx_conversations_user_date ON conversations(user_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_templates_type_lang ON content_templates(template_type, language);
+CREATE INDEX IF NOT EXISTS idx_knowledge_topic ON knowledge_base(topic);
+CREATE INDEX IF NOT EXISTS idx_knowledge_tags ON knowledge_base USING gin(tags);
+CREATE INDEX IF NOT EXISTS idx_knowledge_priority ON knowledge_base(priority);
 
 -- Row Level Security (RLS) - Privacy first
 ALTER TABLE conversations ENABLE ROW LEVEL SECURITY;
