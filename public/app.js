@@ -704,7 +704,8 @@ class RobAI {
       };
 
       await this.currentAudio.play();
-      console.log(`🎙️ OpenAI TTS playing: ${this.currentLanguage} language`);
+      console.log(`✅ PLAYING OPENAI AUDIO: ${this.currentLanguage} language, blob size: ${audioBlob.size} bytes`);
+      console.log(`🔊 Audio element created and playing OpenAI TTS`);
 
     } catch (error) {
       console.error('❌ OpenAI voice synthesis error:', error);
@@ -792,6 +793,7 @@ class RobAI {
     if (!cleanText) return;
 
     // Use high-quality OpenAI TTS
+    console.log(`🚀 CALLING OpenAI TTS (not browser TTS) for: "${cleanText.substring(0, 30)}..."`);
     this.speakWithOpenAIVoice(cleanText);
   }
 

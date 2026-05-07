@@ -44,27 +44,21 @@ const ENCRYPTION_KEY = Buffer.from(process.env.ENCRYPTION_KEY, 'hex');
 
 function encrypt(text) {
   const iv = crypto.randomBytes(16);
-  const cipher = crypto.createCipherGCM('aes-256-gcm', ENCRYPTION_KEY, iv);
-  cipher.setAAD(Buffer.from('rob-ai-data'));
+  const cipher = crypto.createCipher('aes-256-cbc', ENCRYPTION_KEY);
 
   let encrypted = cipher.update(text, 'utf8', 'hex');
   encrypted += cipher.final('hex');
 
-  const authTag = cipher.getAuthTag();
-
   return {
     iv: iv.toString('hex'),
     encrypted: encrypted,
-    authTag: authTag.toString('hex')
+    authTag: '' // Not used in CBC mode
   };
 }
 
 function decrypt(encryptedData) {
   try {
-    const iv = Buffer.from(encryptedData.iv, 'hex');
-    const decipher = crypto.createDecipherGCM('aes-256-gcm', ENCRYPTION_KEY, iv);
-    decipher.setAAD(Buffer.from('rob-ai-data'));
-    decipher.setAuthTag(Buffer.from(encryptedData.authTag, 'hex'));
+    const decipher = crypto.createDecipher('aes-256-cbc', ENCRYPTION_KEY);
 
     let decrypted = decipher.update(encryptedData.encrypted, 'hex', 'utf8');
     decrypted += decipher.final('utf8');
