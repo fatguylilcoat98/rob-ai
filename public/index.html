@@ -652,6 +652,56 @@
     }
 
     /* User info in header */
+    /* Rob Avatar - CSS styled */
+    .rob-avatar {
+      position: absolute;
+      top: 20px;
+      left: 24px;
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, #2c2c2c, #1a1a1a);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Orbitron', monospace;
+      font-weight: 900;
+      font-size: 18px;
+      color: #ffffff;
+      letter-spacing: 1px;
+      text-shadow: 0 0 8px rgba(255, 255, 255, 0.3);
+      border: 2px solid var(--primary);
+      box-shadow: 0 0 12px var(--primary-glow);
+      transition: all 0.3s ease;
+      cursor: pointer;
+      z-index: 10;
+    }
+
+    .rob-avatar:hover {
+      transform: scale(1.1);
+      box-shadow: 0 0 20px var(--primary-glow);
+    }
+
+    @media (max-width: 768px) {
+      .rob-avatar {
+        width: 32px;
+        height: 32px;
+        font-size: 14px;
+        top: 16px;
+        left: 20px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .rob-avatar {
+        width: 28px;
+        height: 28px;
+        font-size: 12px;
+        top: 12px;
+        left: 16px;
+      }
+    }
+
     .user-info {
       position: absolute;
       top: 20px;
@@ -1217,6 +1267,7 @@
   <div class="app-container" id="appContainer">
     <!-- Header -->
     <header class="header">
+      <div class="rob-avatar" id="robAvatar" title="Rob AI Assistant">R</div>
       <div class="splendor-name">SPLENDOR</div>
       <div class="splendor-subtitle">AI Consciousness Partner</div>
       <div class="reality-context">

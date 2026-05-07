@@ -1319,6 +1319,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const closeDashboard = document.getElementById('closeDashboard');
   const dashboardContent = document.getElementById('dashboardContent');
 
+  // Rob avatar element
+  const robAvatar = document.getElementById('robAvatar');
+
   console.log('Elements found:', {
     chatMessages: !!chatMessages,
     messageInput: !!messageInput,
@@ -1402,6 +1405,16 @@ document.addEventListener('DOMContentLoaded', () => {
       if (e.target === dashboardOverlay) {
         closeCognitiveDashboard();
       }
+    });
+  }
+
+  // Rob Avatar Event Listener
+  if (robAvatar) {
+    robAvatar.addEventListener('click', (e) => {
+      e.preventDefault();
+      console.log('Rob avatar clicked');
+      appendMessage('system', 'Hi! I\'m Rob, your AI assistant. How can I help you today?');
+      hideEmptyState();
     });
   }
 
