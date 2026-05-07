@@ -565,15 +565,19 @@ Source dates: ${realTimeData.results.map(r => r.publishedDate).join(', ')}`;
     });
 
   } catch (error) {
-    console.error('Chat error:', error);
+    console.error('💥 Chat error:', error.name, error.message);
+    console.error('Error stack:', error.stack);
 
     const errorMessage = detectLanguage(req.body.message || '') === 'en'
-      ? "I'm having technical issues. Try again in a moment."
-      : "Tengo problemas técnicos. Intenta de nuevo en un momento.";
+      ? `Technical issue: ${error.message}`
+      : `Problema técnico: ${error.message}`;
 
     res.status(500).json({
       error: errorMessage,
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      errorType: error.name,
+      errorDetails: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+      timestamp: new Date().toISOString()
     });
   }
 });
@@ -582,6 +586,7 @@ Source dates: ${realTimeData.results.map(r => r.publishedDate).join(', ')}`;
 app.post('/api/chat-with-voice', async (req, res) => {
   try {
     const { message, userId = uuidv4() } = req.body;
+    const clientIP = req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress;
 
     if (!message || !message.trim()) {
       return res.status(400).json({
@@ -702,10 +707,18 @@ Source dates: ${realTimeData.results.map(r => r.publishedDate).join(', ')}`;
     });
 
   } catch (error) {
-    console.error('Fast chat error:', error);
+    console.error('💥 Fast chat error:', error.name, error.message);
+    console.error('Error stack:', error.stack);
+
+    const errorMessage = `Technical issue: ${error.message}`;
+
     res.status(500).json({
-      error: 'Failed to generate response',
-      error_es: 'Error al generar respuesta'
+      error: errorMessage,
+      error_es: `Problema técnico: ${error.message}`,
+      errorType: error.name,
+      errorDetails: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+      timestamp: new Date().toISOString()
     });
   }
 });
