@@ -828,7 +828,63 @@ class RobAI {
   }
 }
 
+// Detect and handle Google Translate interference
+function detectGoogleTranslate() {
+  // Check for Google Translate elements
+  const translateElements = document.querySelectorAll('[data-translate], .goog-te-combo, .skiptranslate');
+  if (translateElements.length > 0) {
+    console.warn('⚠️ Google Translate detected - may cause app issues');
+
+    // Show user-friendly message
+    const warning = document.createElement('div');
+    warning.innerHTML = `
+      <div style="
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        background: linear-gradient(135deg, #ff6b00, #ff8533);
+        color: white;
+        padding: 12px 20px;
+        text-align: center;
+        font-weight: 600;
+        z-index: 10000;
+        font-family: Inter, sans-serif;
+        font-size: 14px;
+        box-shadow: 0 4px 20px rgba(255, 107, 0, 0.3);
+      ">
+        ⚠️ Google Translate detectado - Por favor desactívalo para mejor experiencia |
+        ⚠️ Google Translate detected - Please disable it for better experience
+        <button onclick="this.parentElement.parentElement.remove()" style="
+          background: rgba(255,255,255,0.2);
+          border: none;
+          color: white;
+          padding: 4px 8px;
+          border-radius: 4px;
+          margin-left: 10px;
+          cursor: pointer;
+        ">✕</button>
+      </div>
+    `;
+    document.body.appendChild(warning);
+
+    // Auto-remove after 10 seconds
+    setTimeout(() => {
+      if (warning.parentElement) {
+        warning.remove();
+      }
+    }, 10000);
+  }
+}
+
 // Initialize app when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
+  // Check for Google Translate interference
+  detectGoogleTranslate();
+
+  // Also check after a delay in case translate loads later
+  setTimeout(detectGoogleTranslate, 2000);
+
+  // Initialize the app
   new RobAI();
 });
