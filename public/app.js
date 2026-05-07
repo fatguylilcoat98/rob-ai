@@ -559,7 +559,12 @@ class RobAI {
         },
         body: JSON.stringify({
           message: message,
-          userId: this.userId
+          userId: this.userId,
+          language: this.currentLanguage,
+          preferredLanguage: this.currentLanguage === 'en' ? 'English' : 'Spanish',
+          systemInstruction: this.currentLanguage === 'en'
+            ? 'Always respond in English. You are Rob, a direct business strategy assistant.'
+            : 'Siempre responde en español. Eres Rob, un asistente directo de estrategia de negocios.'
         })
       });
 
