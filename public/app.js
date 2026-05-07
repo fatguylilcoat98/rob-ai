@@ -42,16 +42,26 @@ class RobAI {
   }
 
   init() {
-    // Check authentication first
-    this.checkAuthentication();
+    try {
+      console.log('🚀 Initializing Rob-AI...');
 
-    if (!this.isAuthenticated) {
+      // Check authentication first
+      this.checkAuthentication();
+
+      if (!this.isAuthenticated) {
+        console.log('🔐 User not authenticated, showing login screen');
+        this.showLoginScreen();
+        return;
+      }
+
+      console.log('✅ User authenticated, initializing app');
+      // Only initialize chat if authenticated
+      this.initializeApp();
+    } catch (error) {
+      console.error('❌ Initialization error:', error);
+      // Fallback: show login screen even if there's an error
       this.showLoginScreen();
-      return;
     }
-
-    // Only initialize chat if authenticated
-    this.initializeApp();
   }
 
   checkAuthentication() {
@@ -79,10 +89,20 @@ class RobAI {
   }
 
   initializeApp() {
+    // Ensure DOM elements are available
+    if (!this.app) {
+      console.error('Main app element not found');
+      return;
+    }
+
     this.setupEventListeners();
     this.updateCharCount();
     this.detectUserLanguage();
-    this.messageInput.focus(); // Focus immediately for instant chat
+
+    // Focus input if available
+    if (this.messageInput) {
+      this.messageInput.focus();
+    }
 
     // Load voices for speech synthesis
     if ('speechSynthesis' in window) {
@@ -120,13 +140,13 @@ class RobAI {
     this.currentLanguage = lang;
     document.body.className = `lang-${lang}`;
 
-    // Update placeholders
+    // Update placeholders (with null checks)
     if (lang === 'en') {
-      this.messageInput.placeholder = 'Type your question here...';
-      this.langToggle.textContent = 'EN';
+      if (this.messageInput) this.messageInput.placeholder = 'Type your question here...';
+      if (this.langToggle) this.langToggle.textContent = 'EN';
     } else {
-      this.messageInput.placeholder = 'Escribe tu pregunta aquí...';
-      this.langToggle.textContent = 'ES';
+      if (this.messageInput) this.messageInput.placeholder = 'Escribe tu pregunta aquí...';
+      if (this.langToggle) this.langToggle.textContent = 'ES';
     }
 
     // Update voice button text visibility
@@ -155,8 +175,10 @@ class RobAI {
   }
 
   showLoginScreen() {
-    // Hide main app
-    this.app.style.display = 'none';
+    // Hide main app (with null check)
+    if (this.app) {
+      this.app.style.display = 'none';
+    }
 
     // Create login overlay if it doesn't exist
     let loginOverlay = document.getElementById('loginOverlay');
@@ -304,56 +326,70 @@ class RobAI {
   }
 
   setupEventListeners() {
-    // Language toggle
-    this.langToggle.addEventListener('click', () => {
-      const newLang = this.currentLanguage === 'es' ? 'en' : 'es';
-      this.setLanguage(newLang);
-    });
+    // Language toggle (with null check)
+    if (this.langToggle) {
+      this.langToggle.addEventListener('click', () => {
+        const newLang = this.currentLanguage === 'es' ? 'en' : 'es';
+        this.setLanguage(newLang);
+      });
+    }
 
-    // Voice toggle
-    this.voiceToggle.addEventListener('click', () => {
-      this.isVoiceEnabled = !this.isVoiceEnabled;
-      this.voiceToggle.classList.toggle('active', this.isVoiceEnabled);
+    // Voice toggle (with null check)
+    if (this.voiceToggle) {
+      this.voiceToggle.addEventListener('click', () => {
+        this.isVoiceEnabled = !this.isVoiceEnabled;
+        this.voiceToggle.classList.toggle('active', this.isVoiceEnabled);
 
-      if (this.isVoiceEnabled) {
-        this.requestMicrophonePermission();
-      }
-    });
-
-    // Voice input - always available
-    this.voiceInputBtn.addEventListener('click', () => {
-      this.toggleVoiceInput();
-    });
-
-    // Delete data
-    this.deleteDataBtn.addEventListener('click', () => {
-      this.deleteUserData();
-    });
-
-    // Chat form
-    this.chatForm.addEventListener('submit', (e) => {
-      e.preventDefault();
-      this.sendMessage();
-    });
-
-    // Message input
-    this.messageInput.addEventListener('input', () => {
-      this.updateCharCount();
-      this.updateSendButton();
-      this.autoResize();
-    });
-
-    this.messageInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        if (!this.sendButton.disabled) {
-          this.sendMessage();
+        if (this.isVoiceEnabled) {
+          this.requestMicrophonePermission();
         }
-      }
-    });
+      });
+    }
+
+    // Voice input (with null check)
+    if (this.voiceInputBtn) {
+      this.voiceInputBtn.addEventListener('click', () => {
+        this.toggleVoiceInput();
+      });
+    }
+
+    // Delete data (with null check)
+    if (this.deleteDataBtn) {
+      this.deleteDataBtn.addEventListener('click', () => {
+        this.deleteUserData();
+      });
+    }
+
+    // Chat form (with null check)
+    if (this.chatForm) {
+      this.chatForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        this.sendMessage();
+      });
+    }
+
+    // Message input (with null checks)
+    if (this.messageInput) {
+      this.messageInput.addEventListener('input', () => {
+        this.updateCharCount();
+        this.updateSendButton();
+        this.autoResize();
+      });
+
+      this.messageInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          if (this.sendButton && !this.sendButton.disabled) {
+            this.sendMessage();
+          }
+        }
+      });
+    }
   }
 
   updateCharCount() {
+    if (!this.messageInput || !this.charCount) return;
+
     const length = this.messageInput.value.length;
     this.charCount.textContent = `${length}/1000`;
 
@@ -365,11 +401,15 @@ class RobAI {
   }
 
   updateSendButton() {
+    if (!this.messageInput || !this.sendButton) return;
+
     const hasText = this.messageInput.value.trim().length > 0;
     this.sendButton.disabled = !hasText;
   }
 
   autoResize() {
+    if (!this.messageInput) return;
+
     this.messageInput.style.height = 'auto';
     this.messageInput.style.height = this.messageInput.scrollHeight + 'px';
   }
