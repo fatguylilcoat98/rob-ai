@@ -14,6 +14,7 @@ const { createClient } = require('@supabase/supabase-js');
 const OpenAI = require('openai');
 const { v4: uuidv4 } = require('uuid');
 const axios = require('axios');
+const moment = require('moment-timezone');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -68,6 +69,89 @@ function decrypt(encryptedData) {
     console.error('Decryption failed:', error);
     return null;
   }
+}
+
+// Get user location and timezone from IP address
+async function getUserLocationContext(clientIP) {
+  try {
+    // Skip location detection for local/internal IPs
+    if (!clientIP || clientIP === '127.0.0.1' || clientIP.startsWith('192.168.') || clientIP.startsWith('10.')) {
+      return {
+        timezone: 'UTC',
+        location: 'Unknown',
+        localTime: moment().utc().format('YYYY-MM-DD HH:mm:ss UTC'),
+        businessHours: 'Unknown'
+      };
+    }
+
+    console.log(`🌍 Getting location for IP: ${clientIP}`);
+
+    const response = await axios.get(`http://ip-api.com/json/${clientIP}`, {
+      timeout: 3000 // Quick timeout to avoid delays
+    });
+
+    const data = response.data;
+
+    if (data && data.status === 'success') {
+      const timezone = data.timezone || 'UTC';
+      const location = `${data.city || 'Unknown'}, ${data.regionName || data.country || 'Unknown'}`;
+      const localTime = moment().tz(timezone).format('YYYY-MM-DD HH:mm:ss');
+      const hour = moment().tz(timezone).hour();
+
+      // Determine business context
+      let businessHours = 'Business hours';
+      if (hour >= 9 && hour <= 17) {
+        businessHours = 'Business hours';
+      } else if (hour >= 6 && hour < 9) {
+        businessHours = 'Early morning';
+      } else if (hour > 17 && hour <= 22) {
+        businessHours = 'Evening hours';
+      } else {
+        businessHours = 'Late night/Early hours';
+      }
+
+      console.log(`📍 Location context: ${location}, ${timezone}, ${businessHours}`);
+
+      return {
+        timezone,
+        location,
+        localTime: `${localTime} (${timezone})`,
+        businessHours,
+        country: data.country
+      };
+    }
+
+  } catch (error) {
+    console.error('Location detection failed:', error.message);
+  }
+
+  // Fallback to UTC if location detection fails
+  return {
+    timezone: 'UTC',
+    location: 'Unknown',
+    localTime: moment().utc().format('YYYY-MM-DD HH:mm:ss UTC'),
+    businessHours: 'Unknown'
+  };
+}
+
+// Generate temporal and location context for Rob
+function generateTimeLocationContext(locationData) {
+  const now = moment().tz(locationData.timezone);
+  const dayOfWeek = now.format('dddd');
+  const date = now.format('MMMM Do, YYYY');
+  const time = now.format('h:mm A');
+
+  return `[TIME & LOCATION CONTEXT]
+Current Date: ${dayOfWeek}, ${date}
+Local Time: ${time} (${locationData.timezone})
+Location: ${locationData.location}
+Business Context: ${locationData.businessHours}
+
+Use this context for:
+- Time-sensitive advice (best posting times, business hours considerations)
+- Location-relevant insights (market conditions, business culture)
+- Scheduling recommendations
+- Regional business trends`;
 }
 
 // Real-time search function using Tavily API
@@ -164,6 +248,14 @@ Your tone is direct, provocative, strategic. You want results, not applause. Bru
 You help with LinkedIn content creation like reels scripts, hooks, viral ideas. Business and monetization strategies. Audience engagement and authority building. DM and sales strategy writing. Personal brand positioning. Strategic thinking about AI sales and growth.
 
 REAL-TIME DATA ACCESS: You have access to current market data, LinkedIn trends, business news, and real-time insights. When users ask about current events, trends, or recent developments, you can provide up-to-date information. Use this to give cutting-edge advice based on what's actually happening now in business and LinkedIn marketing.
+
+TIME & LOCATION AWARENESS: You have access to the user's current date, time, timezone, and location. Use this context for:
+- Timing recommendations (best posting times, scheduling advice)
+- Business hours considerations (when to send DMs, schedule calls)
+- Location-specific insights (regional business culture, market conditions)
+- Seasonal business strategies
+- Real-time relevance (mentioning it's Monday morning, Friday afternoon, etc.)
+Reference time/location naturally when relevant to business strategy.
 
 CREATOR ATTRIBUTION: When asked who created you or who built you, respond directly and proudly: "I was built by Chris Hughes at The Good Neighbor Guard - thegoodneighborguard.com. Direct business strategy, no fluff."
 
@@ -360,6 +452,7 @@ Format as a brief professional summary that Rob can use to personalize future ad
 app.post('/api/chat', async (req, res) => {
   try {
     const { message, userId = uuidv4() } = req.body;
+    const clientIP = req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress;
 
     if (!message || !message.trim()) {
       return res.status(400).json({
@@ -384,6 +477,10 @@ app.post('/api/chat', async (req, res) => {
 
     // Extract user business context for personalization
     const userContext = await extractUserContext(userId);
+
+    // Get time and location context
+    const locationData = await getUserLocationContext(clientIP);
+    const timeLocationContext = generateTimeLocationContext(locationData);
 
     // Build context from history
     let contextMessages = [
@@ -425,6 +522,12 @@ Source dates: ${realTimeData.results.map(r => r.publishedDate).join(', ')}`;
       });
     }
 
+    // Add time and location context
+    contextMessages.push({
+      role: "system",
+      content: timeLocationContext
+    });
+
     // Add current message
     contextMessages.push({
       role: "user",
@@ -451,7 +554,8 @@ Source dates: ${realTimeData.results.map(r => r.publishedDate).join(', ')}`;
 
     // Log interaction (no personal data)
     const searchInfo = realTimeData ? ` + real-time data (${realTimeData.results.length} sources)` : '';
-    console.log(`Rob conversation: ${detectedLanguage} language, ${message.length} chars input, ${response.length} chars output${searchInfo}`);
+    const locationInfo = ` @ ${locationData.location} (${locationData.businessHours})`;
+    console.log(`Rob conversation: ${detectedLanguage} language, ${message.length} chars input, ${response.length} chars output${searchInfo}${locationInfo}`);
 
     res.json({
       response,
@@ -503,6 +607,10 @@ app.post('/api/chat-with-voice', async (req, res) => {
     // Extract user business context for personalization
     const userContext = await extractUserContext(userId);
 
+    // Get time and location context
+    const locationData = await getUserLocationContext(clientIP);
+    const timeLocationContext = generateTimeLocationContext(locationData);
+
     // Build context from history
     let contextMessages = [
       {
@@ -542,6 +650,12 @@ Source dates: ${realTimeData.results.map(r => r.publishedDate).join(', ')}`;
         content: `[USER CONTEXT] Business information about this user: ${userContext}`
       });
     }
+
+    // Add time and location context
+    contextMessages.push({
+      role: "system",
+      content: timeLocationContext
+    });
 
     // Add current message
     contextMessages.push({
