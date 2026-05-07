@@ -13,6 +13,16 @@ class RobAI {
     this.mediaRecorder = null;
     this.audioChunks = [];
 
+    // Authentication state
+    this.isAuthenticated = false;
+    this.currentUser = null;
+
+    // Authorized users - ONLY these two can access
+    this.authorizedUsers = {
+      'admin': 'Rob2024!Secure',
+      'Jose': 'Business2024!'
+    };
+
     // DOM Elements
     this.app = document.getElementById('app');
     this.chatMessages = document.getElementById('chatMessages');
@@ -32,6 +42,43 @@ class RobAI {
   }
 
   init() {
+    // Check authentication first
+    this.checkAuthentication();
+
+    if (!this.isAuthenticated) {
+      this.showLoginScreen();
+      return;
+    }
+
+    // Only initialize chat if authenticated
+    this.initializeApp();
+  }
+
+  checkAuthentication() {
+    const authData = sessionStorage.getItem('rob-auth');
+    if (authData) {
+      try {
+        const parsed = JSON.parse(authData);
+        const now = Date.now();
+
+        // Check if session hasn't expired (24 hours)
+        if (parsed.expires > now && this.authorizedUsers[parsed.username]) {
+          this.isAuthenticated = true;
+          this.currentUser = parsed.username;
+          return;
+        }
+      } catch (e) {
+        console.log('Invalid auth data');
+      }
+    }
+
+    // Clear invalid auth
+    sessionStorage.removeItem('rob-auth');
+    this.isAuthenticated = false;
+    this.currentUser = null;
+  }
+
+  initializeApp() {
     this.setupEventListeners();
     this.updateCharCount();
     this.detectUserLanguage();
@@ -44,6 +91,10 @@ class RobAI {
         this.voicesLoaded = true;
       });
     }
+
+    // Show the main app
+    this.app.style.display = 'block';
+    this.hideLoginScreen();
   }
 
   getUserId() {
@@ -79,8 +130,8 @@ class RobAI {
     }
 
     // Update voice button text visibility
-    const esTexts = document.querySelectorAll('.btn-text-es');
-    const enTexts = document.querySelectorAll('.btn-text-en');
+    const esTexts = document.querySelectorAll('.btn-text-es, .auth-text-es, .warning-es');
+    const enTexts = document.querySelectorAll('.btn-text-en, .auth-text-en, .warning-en');
 
     if (lang === 'en') {
       esTexts.forEach(el => el.style.display = 'none');
@@ -101,6 +152,155 @@ class RobAI {
     }
 
     console.log(`Language switched to ${lang}, voice will use ${lang === 'en' ? 'en-US' : 'es-ES'}`);
+  }
+
+  showLoginScreen() {
+    // Hide main app
+    this.app.style.display = 'none';
+
+    // Create login overlay if it doesn't exist
+    let loginOverlay = document.getElementById('loginOverlay');
+    if (!loginOverlay) {
+      loginOverlay = this.createLoginOverlay();
+      document.body.appendChild(loginOverlay);
+    }
+
+    loginOverlay.style.display = 'flex';
+  }
+
+  hideLoginScreen() {
+    const loginOverlay = document.getElementById('loginOverlay');
+    if (loginOverlay) {
+      loginOverlay.style.display = 'none';
+    }
+  }
+
+  createLoginOverlay() {
+    const overlay = document.createElement('div');
+    overlay.id = 'loginOverlay';
+    overlay.innerHTML = `
+      <div class="login-container">
+        <div class="login-header">
+          <div class="login-avatar">
+            <div class="login-avatar-core">R</div>
+          </div>
+          <h1>ROB-AI ACCESS</h1>
+          <p class="login-subtitle">AUTHORIZED PERSONNEL ONLY</p>
+        </div>
+
+        <form class="login-form" id="authForm">
+          <div class="login-error" id="loginError" style="display: none;"></div>
+
+          <div class="input-group">
+            <input
+              type="text"
+              id="authUsername"
+              placeholder="Username"
+              required
+              autocomplete="username"
+              class="auth-input">
+          </div>
+
+          <div class="input-group">
+            <input
+              type="password"
+              id="authPassword"
+              placeholder="Password"
+              required
+              autocomplete="current-password"
+              class="auth-input">
+          </div>
+
+          <button type="submit" class="auth-submit">
+            <span class="auth-text-es">ACCESO SEGURO</span>
+            <span class="auth-text-en" style="display: none;">SECURE ACCESS</span>
+          </button>
+        </form>
+
+        <div class="login-footer">
+          <p class="warning-text">
+            <span class="warning-es">⚠️ Acceso no autorizado está prohibido</span>
+            <span class="warning-en" style="display: none;">⚠️ Unauthorized access prohibited</span>
+          </p>
+        </div>
+      </div>
+    `;
+
+    // Add event listener for form submission
+    overlay.querySelector('#authForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      this.attemptLogin();
+    });
+
+    return overlay;
+  }
+
+  attemptLogin() {
+    const username = document.getElementById('authUsername').value.trim();
+    const password = document.getElementById('authPassword').value;
+    const errorEl = document.getElementById('loginError');
+
+    // Clear previous errors
+    errorEl.style.display = 'none';
+
+    // Check credentials
+    if (this.authorizedUsers[username] && this.authorizedUsers[username] === password) {
+      // Successful login
+      this.authenticateUser(username);
+    } else {
+      // Failed login
+      this.showLoginError(
+        this.currentLanguage === 'en'
+          ? 'Invalid credentials. Access denied.'
+          : 'Credenciales inválidas. Acceso denegado.'
+      );
+
+      // Clear password field
+      document.getElementById('authPassword').value = '';
+    }
+  }
+
+  authenticateUser(username) {
+    // Set authentication state
+    this.isAuthenticated = true;
+    this.currentUser = username;
+
+    // Create session (expires in 24 hours)
+    const authData = {
+      username: username,
+      expires: Date.now() + (24 * 60 * 60 * 1000), // 24 hours
+      timestamp: Date.now()
+    };
+
+    sessionStorage.setItem('rob-auth', JSON.stringify(authData));
+
+    console.log(`User ${username} authenticated successfully`);
+
+    // Initialize the app
+    this.initializeApp();
+  }
+
+  showLoginError(message) {
+    const errorEl = document.getElementById('loginError');
+    errorEl.textContent = message;
+    errorEl.style.display = 'block';
+
+    // Auto-hide error after 5 seconds
+    setTimeout(() => {
+      errorEl.style.display = 'none';
+    }, 5000);
+  }
+
+  logout() {
+    // Clear authentication
+    this.isAuthenticated = false;
+    this.currentUser = null;
+    sessionStorage.removeItem('rob-auth');
+
+    console.log('User logged out');
+
+    // Show login screen
+    this.showLoginScreen();
   }
 
   setupEventListeners() {
@@ -548,8 +748,8 @@ class RobAI {
 
   async deleteUserData() {
     const confirmMessage = this.currentLanguage === 'en'
-      ? 'Are you sure you want to delete all your conversation data? This cannot be undone.'
-      : '¿Estás seguro de que quieres eliminar todos tus datos de conversación? Esto no se puede deshacer.';
+      ? 'Are you sure you want to delete all your conversation data and log out? This cannot be undone.'
+      : '¿Estás seguro de que quieres eliminar todos tus datos de conversación y cerrar sesión? Esto no se puede deshacer.';
 
     if (!confirm(confirmMessage)) {
       return;
@@ -566,15 +766,15 @@ class RobAI {
         // Clear local storage
         localStorage.removeItem('rob-user-id');
 
+        // Log out user for security
+        this.logout();
+
         // Show success message
         const successMessage = this.currentLanguage === 'en'
-          ? 'Your data has been deleted. The page will reload.'
-          : 'Tus datos han sido eliminados. La página se recargará.';
+          ? 'Your data has been deleted and you have been logged out.'
+          : 'Tus datos han sido eliminados y tu sesión ha sido cerrada.';
 
         alert(successMessage);
-
-        // Reload page
-        window.location.reload();
       } else {
         throw new Error(data.error || 'Failed to delete data');
       }
