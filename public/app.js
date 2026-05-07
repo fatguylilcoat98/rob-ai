@@ -553,11 +553,17 @@ class RobAI {
     // Stop current speech
     this.stopCurrentSpeech();
 
-    // Turn off SPEAK button (voice input) immediately
-    if (this.isRecording) {
-      this.stopVoiceInput();
-      console.log('🎤 SPEAK button turned OFF - user sent message');
+    // Turn off SPEAK button (voice input) immediately and completely
+    this.stopVoiceInput();
+    this.isRecording = false;
+    if (this.voiceInputBtn) {
+      this.voiceInputBtn.classList.remove('active');
+      this.voiceInputBtn.disabled = false; // Reset button state
     }
+    if (this.recognition) {
+      this.recognition.stop();
+    }
+    console.log('🎤 SPEAK button turned OFF and reset - user sent message');
 
     // Add user message to chat
     this.addMessage(message, 'user');
@@ -826,13 +832,24 @@ class RobAI {
         URL.revokeObjectURL(audioUrl);
       };
 
-      // 🎯 SYNCHRONIZED DROP: Display text AND start audio at EXACT same moment
-      console.log(`🚀 PERFECT SYNC: Dropping text and voice together NOW`);
+      // 🎯 SYNCHRONIZED DROP: Wait for text to fully render, then start both together
+      console.log(`🚀 PERFECT SYNC: Adding text first, then syncing with audio`);
 
       this.addMessage(text, 'rob'); // Show text
-      this.currentAudio.play();     // Start audio
 
-      console.log(`✅ SYNCHRONIZED DELIVERY COMPLETE`);
+      // Wait for text rendering to complete, then start audio at exact same moment
+      await new Promise(resolve => {
+        // Wait for next frame to ensure text is fully rendered
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            console.log(`🎯 TEXT RENDERED: Starting audio now for perfect sync`);
+            this.currentAudio.play(); // Start audio after text is done
+            resolve();
+          });
+        });
+      });
+
+      console.log(`✅ SYNCHRONIZED DELIVERY COMPLETE - text and voice matched`);
 
     } catch (error) {
       console.error('❌ Synchronized delivery failed:', error);
