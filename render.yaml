@@ -1,8 +1,10 @@
 services:
   - type: web
-    name: rob-ai
+    name: rob-ai-assistant
+    displayName: "Rob AI - Direct Business Strategy Assistant"
     env: node
     plan: starter
+    region: oregon
     buildCommand: npm install
     startCommand: npm start
     envVars:
