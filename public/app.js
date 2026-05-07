@@ -547,17 +547,16 @@ class RobAI {
     const message = this.messageInput.value.trim();
     if (!message) return;
 
-    // Capture voice state before turning it off
+    // Capture voice output state (keep LISTEN button as-is)
     const voiceWasEnabled = this.isVoiceEnabled;
 
-    // Stop current speech and turn off LISTEN button immediately
+    // Stop current speech
     this.stopCurrentSpeech();
-    if (this.isVoiceEnabled) {
-      this.isVoiceEnabled = false;
-      if (this.voiceToggle) {
-        this.voiceToggle.classList.remove('active');
-      }
-      console.log('🔇 LISTEN button turned OFF - user sent message');
+
+    // Turn off SPEAK button (voice input) immediately
+    if (this.isRecording) {
+      this.stopVoiceInput();
+      console.log('🎤 SPEAK button turned OFF - user sent message');
     }
 
     // Add user message to chat
