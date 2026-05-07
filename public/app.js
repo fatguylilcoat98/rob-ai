@@ -660,6 +660,8 @@ class RobAI {
 
   async speakWithOpenAIVoice(text) {
     try {
+      console.log(`🎙️ Attempting OpenAI TTS for: "${text.substring(0, 50)}..."`);
+
       // Stop any current audio
       this.stopCurrentSpeech();
 
@@ -669,6 +671,7 @@ class RobAI {
       }
 
       // Call backend OpenAI TTS API
+      console.log(`🔊 Calling /api/voice with language: ${this.currentLanguage}`);
       const response = await fetch('/api/voice', {
         method: 'POST',
         headers: {
@@ -681,11 +684,13 @@ class RobAI {
       });
 
       if (!response.ok) {
+        console.error(`❌ Voice API failed: ${response.status}`);
         throw new Error(`Voice API error: ${response.status}`);
       }
 
       // Get audio blob and play it
       const audioBlob = await response.blob();
+      console.log(`✅ Received audio blob: ${audioBlob.size} bytes, type: ${audioBlob.type}`);
       const audioUrl = URL.createObjectURL(audioBlob);
 
       // Create and play audio element
@@ -702,10 +707,11 @@ class RobAI {
       console.log(`🎙️ OpenAI TTS playing: ${this.currentLanguage} language`);
 
     } catch (error) {
-      console.error('OpenAI voice synthesis error:', error);
+      console.error('❌ OpenAI voice synthesis error:', error);
       this.cleanupAudio();
 
       // Fallback to browser TTS if OpenAI fails
+      console.log('🔄 Falling back to browser TTS');
       this.speakWithBrowserTTS(text);
     }
   }

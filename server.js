@@ -41,7 +41,7 @@ const ENCRYPTION_KEY = Buffer.from(process.env.ENCRYPTION_KEY, 'hex');
 
 function encrypt(text) {
   const iv = crypto.randomBytes(16);
-  const cipher = crypto.createCipher('aes-256-gcm', ENCRYPTION_KEY);
+  const cipher = crypto.createCipherGCM('aes-256-gcm', ENCRYPTION_KEY, iv);
   cipher.setAAD(Buffer.from('rob-ai-data'));
 
   let encrypted = cipher.update(text, 'utf8', 'hex');
@@ -58,7 +58,8 @@ function encrypt(text) {
 
 function decrypt(encryptedData) {
   try {
-    const decipher = crypto.createDecipher('aes-256-gcm', ENCRYPTION_KEY);
+    const iv = Buffer.from(encryptedData.iv, 'hex');
+    const decipher = crypto.createDecipherGCM('aes-256-gcm', ENCRYPTION_KEY, iv);
     decipher.setAAD(Buffer.from('rob-ai-data'));
     decipher.setAuthTag(Buffer.from(encryptedData.authTag, 'hex'));
 
@@ -327,6 +328,7 @@ app.post('/api/voice', async (req, res) => {
     res.send(buffer);
 
     console.log(`🎙️ OpenAI TTS: ${selectedVoice} voice, ${language} language, ${cleanText.length} chars`);
+    console.log(`🔊 Generated audio buffer: ${buffer.length} bytes`);
 
   } catch (error) {
     console.error('Voice synthesis error:', error);
