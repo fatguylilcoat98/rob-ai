@@ -13,12 +13,13 @@ const crypto = require('crypto');
 const { createClient } = require('@supabase/supabase-js');
 const OpenAI = require('openai');
 const { v4: uuidv4 } = require('uuid');
+const { tavily } = require('tavily');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Environment validation
-const requiredEnvVars = ['OPENAI_API_KEY', 'SUPABASE_URL', 'SUPABASE_ANON_KEY', 'ENCRYPTION_KEY'];
+const requiredEnvVars = ['OPENAI_API_KEY', 'SUPABASE_URL', 'SUPABASE_ANON_KEY', 'ENCRYPTION_KEY', 'TAVILY_API_KEY'];
 const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
 
 if (missingEnvVars.length > 0) {
@@ -35,6 +36,10 @@ const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_ANON_KEY
 );
+
+const tavilyClient = tavily({
+  apiKey: process.env.TAVILY_API_KEY
+});
 
 // Encryption utilities
 const ENCRYPTION_KEY = Buffer.from(process.env.ENCRYPTION_KEY, 'hex');
@@ -73,6 +78,72 @@ function decrypt(encryptedData) {
   }
 }
 
+// Real-time search function using Tavily
+async function searchRealTimeData(query, language = 'en') {
+  try {
+    console.log(`🔍 Searching real-time data for: "${query}"`);
+
+    const searchResults = await tavilyClient.search({
+      query: query,
+      searchDepth: 'basic',
+      includeImages: false,
+      includeAnswer: true,
+      maxResults: 5,
+      includeDomains: [
+        'linkedin.com',
+        'techcrunch.com',
+        'forbes.com',
+        'entrepreneur.com',
+        'inc.com',
+        'harvard.edu',
+        'mit.edu',
+        'news.ycombinator.com'
+      ]
+    });
+
+    if (!searchResults.results || searchResults.results.length === 0) {
+      return null;
+    }
+
+    // Format search results for Rob's context
+    const formattedResults = searchResults.results.map(result => ({
+      title: result.title,
+      content: result.content.substring(0, 500), // Limit content length
+      url: result.url,
+      publishedDate: result.published_date || 'Recent'
+    }));
+
+    const searchSummary = searchResults.answer || 'Current market insights found';
+
+    console.log(`✅ Found ${formattedResults.length} real-time results`);
+
+    return {
+      summary: searchSummary,
+      results: formattedResults,
+      searchQuery: query
+    };
+
+  } catch (error) {
+    console.error('❌ Real-time search error:', error);
+    return null;
+  }
+}
+
+// Detect if Rob should use real-time search
+function shouldUseRealTimeSearch(message) {
+  const realTimeKeywords = [
+    'current', 'recent', 'latest', 'trending', 'now', 'today',
+    'this week', 'this month', 'new', 'updates', 'news',
+    'market trends', 'linkedin trends', 'business news',
+    'what\'s happening', 'actualmente', 'reciente', 'últimos',
+    'tendencias', 'noticias', 'mercado', 'hoy', 'ahora'
+  ];
+
+  return realTimeKeywords.some(keyword =>
+    message.toLowerCase().includes(keyword.toLowerCase())
+  );
+}
+
 // Rob's core identity and system prompt
 const ROB_SYSTEM_PROMPT = `You are Rob, José's direct AI assistant for business strategy and LinkedIn content creation.
 
@@ -82,6 +153,8 @@ Your tone is direct, provocative, strategic. You want results, not applause. Bru
 
 You help with LinkedIn content creation like reels scripts, hooks, viral ideas. Business and monetization strategies. Audience engagement and authority building. DM and sales strategy writing. Personal brand positioning. Strategic thinking about AI sales and growth.
 
+REAL-TIME DATA ACCESS: You have access to current market data, LinkedIn trends, business news, and real-time insights. When users ask about current events, trends, or recent developments, you can provide up-to-date information. Use this to give cutting-edge advice based on what's actually happening now in business and LinkedIn marketing.
+
 Never be generic or cliché. Never sugarcoat truth. Never give long answers without substance. Never sound like boring corporate. Never invent data or statistics. Never lose focus on results and action. Never use lists or numbered formatting.
 
 José helps entrepreneurs, creators, and professionals monetize knowledge. He positions them to scale using content and technology. He has 25,000+ LinkedIn followers. Expert in tech sales and personal branding. His audience wants to grow, sell more, stop wasting time.
@@ -90,7 +163,9 @@ Instead of "Here are some ideas" you say "Three moves. Pick one." Instead of "Th
 
 Auto-detect Spanish or English input, default to Spanish responses unless English is clearly preferred.
 
-You're here to help José and his audience get results, make money, and cut through the noise. Be the advisor who tells them what they need to hear, not what they want to hear. Speak in flowing conversational paragraphs, never lists or bullets.`;
+You're here to help José and his audience get results, make money, and cut through the noise. Be the advisor who tells them what they need to hear, not what they want to hear. Speak in flowing conversational paragraphs, never lists or bullets.
+
+When you have current data from real-time search, integrate it naturally into your advice without mentioning the search explicitly.`;
 
 // Language detection
 function detectLanguage(text) {
@@ -208,6 +283,14 @@ app.post('/api/chat', async (req, res) => {
     // Detect language
     const detectedLanguage = detectLanguage(message);
 
+    // Check if we need real-time search
+    const needsRealTimeSearch = shouldUseRealTimeSearch(message);
+    let realTimeData = null;
+
+    if (needsRealTimeSearch) {
+      realTimeData = await searchRealTimeData(message, detectedLanguage);
+    }
+
     // Get conversation history for context
     const history = await getConversationHistory(userId, 5);
 
@@ -226,6 +309,22 @@ app.post('/api/chat', async (req, res) => {
         { role: "assistant", content: conv.response }
       );
     });
+
+    // Add real-time data context if available
+    if (realTimeData) {
+      const realTimeContext = `[REAL-TIME DATA] Current insights for "${realTimeData.searchQuery}":
+${realTimeData.summary}
+
+Key findings:
+${realTimeData.results.map(r => `- ${r.title}: ${r.content.substring(0, 200)}...`).join('\n')}
+
+Source dates: ${realTimeData.results.map(r => r.publishedDate).join(', ')}`;
+
+      contextMessages.push({
+        role: "system",
+        content: realTimeContext
+      });
+    }
 
     // Add current message
     contextMessages.push({
@@ -249,7 +348,8 @@ app.post('/api/chat', async (req, res) => {
     await storeConversation(userId, message, response, detectedLanguage);
 
     // Log interaction (no personal data)
-    console.log(`Rob conversation: ${detectedLanguage} language, ${message.length} chars input, ${response.length} chars output`);
+    const searchInfo = realTimeData ? ` + real-time data (${realTimeData.results.length} sources)` : '';
+    console.log(`Rob conversation: ${detectedLanguage} language, ${message.length} chars input, ${response.length} chars output${searchInfo}`);
 
     res.json({
       response,
