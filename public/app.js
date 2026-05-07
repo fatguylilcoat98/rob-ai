@@ -555,7 +555,7 @@ class RobAI {
 
     // Turn off SPEAK button (voice input) if it's active
     if (this.isRecording) {
-      this.stopVoiceInput();
+      this.stopSpeechRecognition();
       console.log('🎤 SPEAK button turned OFF - user sent message');
     }
 
