@@ -13,7 +13,7 @@ const crypto = require('crypto');
 const { createClient } = require('@supabase/supabase-js');
 const OpenAI = require('openai');
 const { v4: uuidv4 } = require('uuid');
-const { tavily } = require('tavily');
+const axios = require('axios');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -37,9 +37,7 @@ const supabase = createClient(
   process.env.SUPABASE_ANON_KEY
 );
 
-const tavilyClient = tavily({
-  apiKey: process.env.TAVILY_API_KEY
-});
+// Tavily API will be called directly using axios
 
 // Encryption utilities
 const ENCRYPTION_KEY = Buffer.from(process.env.ENCRYPTION_KEY, 'hex');
@@ -78,18 +76,19 @@ function decrypt(encryptedData) {
   }
 }
 
-// Real-time search function using Tavily
+// Real-time search function using Tavily API
 async function searchRealTimeData(query, language = 'en') {
   try {
     console.log(`🔍 Searching real-time data for: "${query}"`);
 
-    const searchResults = await tavilyClient.search({
+    const response = await axios.post('https://api.tavily.com/search', {
+      api_key: process.env.TAVILY_API_KEY,
       query: query,
-      searchDepth: 'basic',
-      includeImages: false,
-      includeAnswer: true,
-      maxResults: 5,
-      includeDomains: [
+      search_depth: 'basic',
+      include_images: false,
+      include_answer: true,
+      max_results: 5,
+      include_domains: [
         'linkedin.com',
         'techcrunch.com',
         'forbes.com',
@@ -99,7 +98,13 @@ async function searchRealTimeData(query, language = 'en') {
         'mit.edu',
         'news.ycombinator.com'
       ]
+    }, {
+      headers: {
+        'Content-Type': 'application/json'
+      }
     });
+
+    const searchResults = response.data;
 
     if (!searchResults.results || searchResults.results.length === 0) {
       return null;
@@ -108,7 +113,7 @@ async function searchRealTimeData(query, language = 'en') {
     // Format search results for Rob's context
     const formattedResults = searchResults.results.map(result => ({
       title: result.title,
-      content: result.content.substring(0, 500), // Limit content length
+      content: result.content ? result.content.substring(0, 500) : result.snippet || '',
       url: result.url,
       publishedDate: result.published_date || 'Recent'
     }));
