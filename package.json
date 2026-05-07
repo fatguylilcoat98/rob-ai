@@ -1,0 +1,30 @@
+{
+  "name": "rob-ai",
+  "version": "1.0.0",
+  "description": "Rob - Direct AI Assistant for LinkedIn Content & Business Strategy",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "helmet": "^7.0.0",
+    "dotenv": "^16.0.3",
+    "@supabase/supabase-js": "^2.105.3",
+    "openai": "^4.20.1",
+    "crypto": "^1.0.1",
+    "node-cron": "^3.0.2",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": ["ai", "assistant", "linkedin", "content", "business", "rob"],
+  "author": "José - Rob AI Assistant",
+  "license": "MIT"
+}
