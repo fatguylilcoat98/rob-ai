@@ -192,8 +192,9 @@ app.use(helmet({
       scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
-      connectSrc: ["'self'", "https://api.openai.com"],
+      connectSrc: ["'self'", "https://api.openai.com", "https://api.tavily.com"],
       imgSrc: ["'self'", "data:", "https:"],
+      mediaSrc: ["'self'", "blob:", "data:"],
     },
   },
 }));
