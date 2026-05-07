@@ -418,6 +418,42 @@ body::before {
   overflow-y: auto;
   padding: var(--spacing-xl);
   scroll-behavior: smooth;
+  position: relative;
+}
+
+/* Faded Rob Avatar Background */
+.chat-messages::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 400px;
+  height: 400px;
+  background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><defs><linearGradient id="robotGradient" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="%23ffffff" stop-opacity="0.08"/><stop offset="100%" stop-color="%23e0e0e0" stop-opacity="0.05"/></linearGradient><filter id="glow"><feGaussianBlur stdDeviation="2" result="coloredBlur"/><feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><g transform="translate(50,40)"><rect width="100" height="100" x="0" y="20" rx="15" fill="url(%23robotGradient)" stroke="%2300d4ff" stroke-width="1" stroke-opacity="0.1"/><rect width="80" height="60" x="10" y="30" rx="8" fill="%23ffffff" fill-opacity="0.02"/><circle cx="30" cy="50" r="6" fill="%2300d4ff" fill-opacity="0.15" filter="url(%23glow)"/><circle cx="70" cy="50" r="6" fill="%2300d4ff" fill-opacity="0.15" filter="url(%23glow)"/><rect width="30" height="8" x="35" y="70" rx="4" fill="%23ffffff" fill-opacity="0.05"/><text x="50" y="65" font-family="Arial,sans-serif" font-size="24" font-weight="900" text-anchor="middle" fill="%2300d4ff" fill-opacity="0.2">R</text><rect width="20" height="4" x="20" y="100" rx="2" fill="%2300d4ff" fill-opacity="0.1"/><rect width="20" height="4" x="60" y="100" rx="2" fill="%2300d4ff" fill-opacity="0.1"/><circle cx="50" cy="140" r="40" fill="none" stroke="%2300d4ff" stroke-width="1" stroke-opacity="0.05" stroke-dasharray="5,5"/></g></svg>');
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  transform: translate(-50%, -50%);
+  opacity: 0.04;
+  pointer-events: none;
+  z-index: 0;
+  animation: subtleFloat 20s ease-in-out infinite;
+}
+
+@keyframes subtleFloat {
+  0%, 100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.04;
+  }
+  50% {
+    transform: translate(-50%, -52%) scale(1.02);
+    opacity: 0.06;
+  }
+}
+
+.chat-messages .message {
+  position: relative;
+  z-index: 1;
 }
 
 .chat-messages::-webkit-scrollbar {
@@ -511,6 +547,46 @@ body::before {
   text-transform: uppercase;
   letter-spacing: 1px;
   font-size: 0.9em;
+}
+
+/* Speaker Button */
+.speaker-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  padding: 6px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.7;
+}
+
+.speaker-btn:hover {
+  background: var(--glass-hover);
+  color: var(--primary-color);
+  border-color: var(--primary-color);
+  opacity: 1;
+  transform: scale(1.1);
+}
+
+.speaker-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.speaker-btn svg {
+  transition: transform 0.3s ease;
+}
+
+.speaker-btn:hover:not(:disabled) svg {
+  transform: scale(1.1);
 }
 
 /* Typing Indicator */

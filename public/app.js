@@ -36,6 +36,14 @@ class RobAI {
     this.updateCharCount();
     this.detectUserLanguage();
     this.messageInput.focus(); // Focus immediately for instant chat
+
+    // Load voices for speech synthesis
+    if ('speechSynthesis' in window) {
+      speechSynthesis.getVoices(); // Trigger loading
+      window.addEventListener('voiceschanged', () => {
+        this.voicesLoaded = true;
+      });
+    }
   }
 
   getUserId() {
@@ -88,11 +96,9 @@ class RobAI {
       }
     });
 
-    // Voice input
+    // Voice input - always available
     this.voiceInputBtn.addEventListener('click', () => {
-      if (this.isVoiceEnabled) {
-        this.toggleVoiceInput();
-      }
+      this.toggleVoiceInput();
     });
 
     // Delete data
@@ -159,64 +165,93 @@ class RobAI {
     }
   }
 
-  async toggleVoiceInput() {
+  toggleVoiceInput() {
     if (this.isRecording) {
-      this.stopRecording();
+      this.stopSpeechRecognition();
     } else {
-      this.startRecording();
+      this.startSpeechRecognition();
     }
   }
 
-  async startRecording() {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      this.mediaRecorder = new MediaRecorder(stream);
-      this.audioChunks = [];
-
-      this.mediaRecorder.ondataavailable = (event) => {
-        this.audioChunks.push(event.data);
-      };
-
-      this.mediaRecorder.onstop = () => {
-        this.processRecording();
-      };
-
-      this.mediaRecorder.start();
-      this.isRecording = true;
-      this.voiceInputBtn.classList.add('recording');
-
-    } catch (error) {
-      console.error('Failed to start recording:', error);
+  startSpeechRecognition() {
+    // Check for speech recognition support
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
       this.showError(
         this.currentLanguage === 'en'
-          ? 'Failed to start recording. Please try again.'
-          : 'Error al iniciar grabación. Intenta de nuevo.'
+          ? 'Speech recognition not supported in this browser.'
+          : 'Reconocimiento de voz no soportado en este navegador.'
+      );
+      return;
+    }
+
+    this.recognition = new SpeechRecognition();
+    this.recognition.continuous = true;
+    this.recognition.interimResults = true;
+    this.recognition.lang = this.currentLanguage === 'en' ? 'en-US' : 'es-ES';
+
+    let finalTranscript = '';
+
+    this.recognition.onstart = () => {
+      this.isRecording = true;
+      this.voiceInputBtn.classList.add('recording');
+    };
+
+    this.recognition.onresult = (event) => {
+      let interimTranscript = '';
+
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript + ' ';
+        } else {
+          interimTranscript += transcript;
+        }
+      }
+
+      // Show live transcription in input field
+      this.messageInput.value = finalTranscript + interimTranscript;
+      this.updateCharCount();
+      this.updateSendButton();
+      this.autoResize();
+    };
+
+    this.recognition.onerror = (event) => {
+      console.error('Speech recognition error:', event.error);
+      this.stopSpeechRecognition();
+      this.showError(
+        this.currentLanguage === 'en'
+          ? 'Speech recognition error. Please try again.'
+          : 'Error de reconocimiento de voz. Intenta de nuevo.'
+      );
+    };
+
+    this.recognition.onend = () => {
+      if (this.isRecording) {
+        // Recognition ended unexpectedly, restart it
+        this.recognition.start();
+      }
+    };
+
+    try {
+      this.recognition.start();
+    } catch (error) {
+      console.error('Failed to start speech recognition:', error);
+      this.showError(
+        this.currentLanguage === 'en'
+          ? 'Could not start speech recognition.'
+          : 'No se pudo iniciar el reconocimiento de voz.'
       );
     }
   }
 
-  stopRecording() {
-    if (this.mediaRecorder && this.isRecording) {
-      this.mediaRecorder.stop();
-      this.isRecording = false;
-      this.voiceInputBtn.classList.remove('recording');
-
-      // Stop all audio tracks
-      this.mediaRecorder.stream.getTracks().forEach(track => track.stop());
+  stopSpeechRecognition() {
+    if (this.recognition) {
+      this.recognition.stop();
+      this.recognition = null;
     }
-  }
-
-  async processRecording() {
-    // For now, just show that voice input was attempted
-    // In a full implementation, you'd send the audio to OpenAI's speech-to-text API
-    const placeholder = this.currentLanguage === 'en'
-      ? '[Voice input - feature coming soon]'
-      : '[Entrada de voz - función próximamente]';
-
-    this.messageInput.value = placeholder;
-    this.updateCharCount();
-    this.updateSendButton();
-    this.messageInput.focus();
+    this.isRecording = false;
+    this.voiceInputBtn.classList.remove('recording');
   }
 
   async sendMessage() {
@@ -288,6 +323,22 @@ class RobAI {
       // Format Rob's responses (support for basic markdown-like formatting)
       const formattedText = this.formatRobResponse(text);
       contentDiv.innerHTML = formattedText;
+
+      // Add speaker button for Rob's messages
+      const speakerBtn = document.createElement('button');
+      speakerBtn.className = 'speaker-btn';
+      speakerBtn.innerHTML = `
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M3 10V14H7L12 19V5L7 10H3ZM16.5 12C16.5 10.23 15.5 8.71 14 7.97V16.02C15.5 15.29 16.5 13.77 16.5 12ZM14 3.23V5.29C16.89 6.15 19 8.83 19 12C19 15.17 16.89 17.85 14 18.71V20.77C18.01 19.86 21 16.28 21 12C21 7.72 18.01 4.14 14 3.23Z"/>
+        </svg>
+      `;
+      speakerBtn.title = this.currentLanguage === 'en' ? 'Play voice' : 'Reproducir voz';
+
+      speakerBtn.addEventListener('click', () => {
+        this.playRobVoice(text, speakerBtn);
+      });
+
+      contentDiv.appendChild(speakerBtn);
     } else {
       contentDiv.textContent = text;
     }
@@ -323,6 +374,96 @@ class RobAI {
     setTimeout(() => {
       this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
     }, 100);
+  }
+
+  async playRobVoice(text, button) {
+    // Show loading state
+    button.disabled = true;
+    button.innerHTML = `
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12,4V2A10,10 0 0,0 2,12H4A8,8 0 0,1 12,4Z">
+          <animateTransform attributeName="transform" type="rotate" dur="1s" repeatCount="indefinite" values="0 12 12;360 12 12"/>
+        </path>
+      </svg>
+    `;
+
+    try {
+      // Try OpenAI API first
+      const response = await fetch('/api/voice', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          text: text,
+          language: this.currentLanguage
+        })
+      });
+
+      if (response.ok) {
+        const audioBlob = await response.blob();
+        const audioUrl = URL.createObjectURL(audioBlob);
+        const audio = new Audio(audioUrl);
+
+        audio.play().catch(error => {
+          console.error('Audio playback failed:', error);
+          this.fallbackToWebSpeech(text);
+        });
+
+        audio.onended = () => {
+          URL.revokeObjectURL(audioUrl);
+          this.resetSpeakerButton(button);
+        };
+
+        audio.onerror = () => {
+          this.fallbackToWebSpeech(text);
+          this.resetSpeakerButton(button);
+        };
+      } else {
+        // Fallback to Web Speech API
+        this.fallbackToWebSpeech(text);
+        this.resetSpeakerButton(button);
+      }
+    } catch (error) {
+      console.error('Voice synthesis failed:', error);
+      // Fallback to Web Speech API
+      this.fallbackToWebSpeech(text);
+      this.resetSpeakerButton(button);
+    }
+  }
+
+  fallbackToWebSpeech(text) {
+    if ('speechSynthesis' in window) {
+      // Clean text for speech synthesis
+      const cleanText = text.replace(/<[^>]*>/g, '').replace(/\*\*/g, '');
+
+      const utterance = new SpeechSynthesisUtterance(cleanText);
+      utterance.lang = this.currentLanguage === 'en' ? 'en-US' : 'es-ES';
+      utterance.rate = 0.9;
+      utterance.pitch = 0.8;
+
+      // Try to use a male voice
+      const voices = speechSynthesis.getVoices();
+      const preferredVoice = voices.find(voice =>
+        voice.lang.startsWith(this.currentLanguage) &&
+        (voice.name.includes('Male') || voice.name.includes('David') || voice.name.includes('Alex'))
+      );
+
+      if (preferredVoice) {
+        utterance.voice = preferredVoice;
+      }
+
+      speechSynthesis.speak(utterance);
+    }
+  }
+
+  resetSpeakerButton(button) {
+    button.disabled = false;
+    button.innerHTML = `
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M3 10V14H7L12 19V5L7 10H3ZM16.5 12C16.5 10.23 15.5 8.71 14 7.97V16.02C15.5 15.29 16.5 13.77 16.5 12ZM14 3.23V5.29C16.89 6.15 19 8.83 19 12C19 15.17 16.89 17.85 14 18.71V20.77C18.01 19.86 21 16.28 21 12C21 7.72 18.01 4.14 14 3.23Z"/>
+      </svg>
+    `;
   }
 
   async speakResponse(text) {
