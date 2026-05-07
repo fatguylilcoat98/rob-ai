@@ -15,7 +15,6 @@ class RobAI {
 
     // DOM Elements
     this.app = document.getElementById('app');
-    this.privacyModal = document.getElementById('privacyModal');
     this.chatMessages = document.getElementById('chatMessages');
     this.messageInput = document.getElementById('messageInput');
     this.sendButton = document.getElementById('sendButton');
@@ -25,11 +24,9 @@ class RobAI {
 
     // Control buttons
     this.langToggle = document.getElementById('langToggle');
-    this.langToggleModal = document.getElementById('langToggleModal');
     this.voiceToggle = document.getElementById('voiceToggle');
     this.voiceInputBtn = document.getElementById('voiceInputBtn');
     this.deleteDataBtn = document.getElementById('deleteData');
-    this.acceptPrivacyBtn = document.getElementById('acceptPrivacy');
 
     this.init();
   }
@@ -37,8 +34,8 @@ class RobAI {
   init() {
     this.setupEventListeners();
     this.updateCharCount();
-    this.checkPrivacyAcceptance();
     this.detectUserLanguage();
+    this.messageInput.focus(); // Focus immediately for instant chat
   }
 
   getUserId() {
@@ -48,15 +45,6 @@ class RobAI {
       localStorage.setItem('rob-user-id', userId);
     }
     return userId;
-  }
-
-  checkPrivacyAcceptance() {
-    const privacyAccepted = localStorage.getItem('rob-privacy-accepted');
-    if (privacyAccepted === 'true') {
-      this.showApp();
-    } else {
-      this.showPrivacyModal();
-    }
   }
 
   detectUserLanguage() {
@@ -69,17 +57,6 @@ class RobAI {
     }
   }
 
-  showPrivacyModal() {
-    this.privacyModal.style.display = 'flex';
-    this.app.style.display = 'none';
-  }
-
-  showApp() {
-    this.privacyModal.style.display = 'none';
-    this.app.style.display = 'flex';
-    this.messageInput.focus();
-  }
-
   setLanguage(lang) {
     this.currentLanguage = lang;
     document.body.className = `lang-${lang}`;
@@ -88,26 +65,13 @@ class RobAI {
     if (lang === 'en') {
       this.messageInput.placeholder = 'Type your question here...';
       this.langToggle.textContent = 'EN';
-      this.langToggleModal.textContent = 'ES';
     } else {
       this.messageInput.placeholder = 'Escribe tu pregunta aquí...';
       this.langToggle.textContent = 'ES';
-      this.langToggleModal.textContent = 'EN';
     }
   }
 
   setupEventListeners() {
-    // Privacy modal
-    this.acceptPrivacyBtn.addEventListener('click', () => {
-      localStorage.setItem('rob-privacy-accepted', 'true');
-      this.showApp();
-    });
-
-    this.langToggleModal.addEventListener('click', () => {
-      const newLang = this.currentLanguage === 'es' ? 'en' : 'es';
-      this.setLanguage(newLang);
-    });
-
     // Language toggle
     this.langToggle.addEventListener('click', () => {
       const newLang = this.currentLanguage === 'es' ? 'en' : 'es';
@@ -412,7 +376,6 @@ class RobAI {
       if (response.ok) {
         // Clear local storage
         localStorage.removeItem('rob-user-id');
-        localStorage.removeItem('rob-privacy-accepted');
 
         // Show success message
         const successMessage = this.currentLanguage === 'en'

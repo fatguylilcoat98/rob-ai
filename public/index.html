@@ -18,52 +18,8 @@
     <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-    <!-- Privacy Disclaimer Modal -->
-    <div id="privacyModal" class="privacy-modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>🔒 Privacidad & Datos</h2>
-                <button id="langToggleModal" class="lang-toggle">EN</button>
-            </div>
-            <div class="modal-body">
-                <div id="privacyTextEs" class="privacy-text">
-                    <p><strong>Rob-AI respeta tu privacidad:</strong></p>
-                    <ul>
-                        <li>✅ Todas las conversaciones se encriptan con AES-256-GCM</li>
-                        <li>✅ Los datos se eliminan automáticamente después de 90 días</li>
-                        <li>✅ No se almacenan datos personales identificables</li>
-                        <li>✅ Puedes eliminar tus datos en cualquier momento</li>
-                        <li>✅ Los logs del servidor no contienen contenido de conversaciones</li>
-                    </ul>
-                    <p>Al continuar, aceptas estos términos de privacidad.</p>
-                </div>
-                <div id="privacyTextEn" class="privacy-text" style="display: none;">
-                    <p><strong>Rob-AI respects your privacy:</strong></p>
-                    <ul>
-                        <li>✅ All conversations encrypted with AES-256-GCM</li>
-                        <li>✅ Data automatically deleted after 90 days</li>
-                        <li>✅ No personally identifiable information stored</li>
-                        <li>✅ You can delete your data anytime</li>
-                        <li>✅ Server logs contain zero conversation content</li>
-                    </ul>
-                    <p>By continuing, you accept these privacy terms.</p>
-                </div>
-            </div>
-            <div class="modal-actions">
-                <button id="acceptPrivacy" class="btn-primary">
-                    <span class="btn-text-es">Continuar con Rob</span>
-                    <span class="btn-text-en" style="display: none;">Continue with Rob</span>
-                </button>
-                <a href="/privacy" target="_blank" class="privacy-link">
-                    <span class="link-text-es">Ver política completa</span>
-                    <span class="link-text-en" style="display: none;">View full policy</span>
-                </a>
-            </div>
-        </div>
-    </div>
-
     <!-- Main App -->
-    <div id="app" class="app-container" style="display: none;">
+    <div id="app" class="app-container">
         <!-- Header -->
         <header class="app-header">
             <div class="header-content">
