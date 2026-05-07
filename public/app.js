@@ -777,9 +777,9 @@ class RobAI {
 
   async deliverSynchronizedResponse(text, audioBuffer) {
     try {
-      console.log(`⚡ SYNC PREP: Preparing text and audio for simultaneous delivery`);
+      console.log(`⚡ VOICE FIRST: Starting audio load immediately while rendering text`);
 
-      // Convert base64 to blob and prepare audio
+      // Start audio preparation immediately
       const audioBytes = atob(audioBuffer);
       const audioArray = new Uint8Array(audioBytes.length);
       for (let i = 0; i < audioBytes.length; i++) {
@@ -789,24 +789,37 @@ class RobAI {
       const audioBlob = new Blob([audioArray], { type: 'audio/mpeg' });
       const audioUrl = URL.createObjectURL(audioBlob);
 
-      // Create audio element but DON'T play yet
+      // Create and start loading audio immediately
       this.currentAudio = new Audio(audioUrl);
 
-      // Wait for audio to be fully loaded and ready (with timeout)
-      await Promise.race([
-        new Promise((resolve, reject) => {
-          this.currentAudio.oncanplaythrough = () => {
-            console.log(`🎯 AUDIO READY: ${audioBlob.size} bytes loaded and ready`);
-            resolve();
-          };
-          this.currentAudio.onerror = (e) => {
-            console.error('Audio loading error:', e);
-            reject(e);
-          };
-          this.currentAudio.load(); // Start loading
-        }),
-        new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Audio loading timeout')), 5000); // 5 second timeout
+      // Start audio loading in parallel with text rendering
+      const audioLoadPromise = new Promise((resolve, reject) => {
+        this.currentAudio.oncanplaythrough = () => {
+          console.log(`🎯 AUDIO LOADED: ${audioBlob.size} bytes ready while text renders`);
+          resolve();
+        };
+        this.currentAudio.onerror = (e) => {
+          console.error('Audio loading error:', e);
+          reject(e);
+        };
+        this.currentAudio.load(); // Start loading immediately
+      });
+
+      // Render text immediately while audio loads
+      console.log(`📝 RENDERING TEXT: While audio loads in parallel`);
+      this.addMessage(text, 'rob');
+
+      // Wait for both audio loading and text rendering to complete
+      await Promise.all([
+        audioLoadPromise,
+        new Promise(resolve => {
+          // Ensure text is fully rendered
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              console.log(`✅ TEXT RENDERED: Ready for audio sync`);
+              resolve();
+            });
+          });
         })
       ]);
 
@@ -826,24 +839,11 @@ class RobAI {
         URL.revokeObjectURL(audioUrl);
       };
 
-      // 🎯 SYNCHRONIZED DROP: Wait for text to fully render, then start both together
-      console.log(`🚀 PERFECT SYNC: Adding text first, then syncing with audio`);
+      // Start audio now that both text and audio are ready
+      console.log(`🚀 PERFECT SYNC: Audio catches up to text, starting playback NOW`);
+      this.currentAudio.play();
 
-      this.addMessage(text, 'rob'); // Show text
-
-      // Wait for text rendering to complete, then start audio at exact same moment
-      await new Promise(resolve => {
-        // Wait for next frame to ensure text is fully rendered
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            console.log(`🎯 TEXT RENDERED: Starting audio now for perfect sync`);
-            this.currentAudio.play(); // Start audio after text is done
-            resolve();
-          });
-        });
-      });
-
-      console.log(`✅ SYNCHRONIZED DELIVERY COMPLETE - text and voice matched`);
+      console.log(`✅ SYNCHRONIZED DELIVERY COMPLETE - voice caught up to text`);
 
     } catch (error) {
       console.error('❌ Synchronized delivery failed:', error);
