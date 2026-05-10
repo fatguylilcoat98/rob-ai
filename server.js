@@ -493,6 +493,9 @@ app.use(helmet({
   },
 }));
 
+// Configure Express for Render deployment
+app.set('trust proxy', 1); // Trust first proxy (Render)
+
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(generalLimiter); // Apply general rate limiting to all routes
