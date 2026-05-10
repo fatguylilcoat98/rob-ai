@@ -43,75 +43,6 @@ const supabase = createClient(
 
 // Tavily API will be called directly using axios
 
-// Embedded encrypted user accounts (Jose and Admin)
-const JOSE_DATA = "=0nIlJXdjV2UhQjMwITZz9mSiojIkJ3b3N3chBnIsISbvNmLpFWLi9mcAV2cvpmI6ICbpFWblJCLik6wz9mSiojIl1WYuJye";
-const ADMIN_DATA = "==QfiUmc1NWZTFCNyAjMulWbkFmI6ICZy92dzNXYwJCLi02bj5Sah1iYvJHQulWbkFmI6ICbpFWblJCLi4WatRWQiojIl1WYuJye";
-
-// Decode user data
-function decodeUserData(encodedData) {
-  try {
-    const decoded = Buffer.from(encodedData.split('').reverse().join(''), 'base64').toString('utf8');
-    return JSON.parse(decoded);
-  } catch (error) {
-    console.error('Failed to decode user data:', error);
-    return null;
-  }
-}
-
-// Initialize system users
-async function initializeSystemUsers() {
-  try {
-    console.log('🔐 Initializing system users...');
-
-    const users = [
-      decodeUserData(JOSE_DATA),
-      decodeUserData(ADMIN_DATA)
-    ];
-
-    const saltRounds = 12;
-
-    for (const userData of users) {
-      if (!userData) continue;
-
-      // Check if user already exists
-      const { data: existingUser } = await supabase
-        .from('users')
-        .select('email')
-        .eq('email', userData.email.toLowerCase())
-        .single();
-
-      if (existingUser) {
-        console.log(`✅ User ${userData.email} already exists`);
-        continue;
-      }
-
-      // Hash password and create user
-      const passwordHash = await bcrypt.hash(userData.password, saltRounds);
-
-      const { data: newUser, error } = await supabase
-        .from('users')
-        .insert([{
-          email: userData.email.toLowerCase(),
-          password_hash: passwordHash,
-          name: userData.name,
-          is_active: true,
-          email_verified: true
-        }])
-        .select('id, email, name')
-        .single();
-
-      if (error) {
-        console.error(`❌ Error creating user ${userData.email}:`, error.message);
-      } else {
-        console.log(`✅ Created user: ${newUser.name} (${newUser.email})`);
-      }
-    }
-
-    console.log('🔐 System users initialized successfully');
-  } catch (error) {
-    console.error('💥 Failed to initialize system users:', error);
-  }
-}
 
 // Rate limiting for authentication endpoints
 const authLimiter = rateLimit({
@@ -643,267 +574,11 @@ Format as a brief professional summary that Rob can use to personalize future ad
 
 // API Routes
 
-// Authentication Routes
-
-// Registration disabled - This is a private system for authorized users only
-
-// Login endpoint
-app.post('/api/auth/login', authLimiter, async (req, res) => {
-  try {
-    const { email, password } = req.body;
-
-    // Validate input
-    if (!email || !password) {
-      return res.status(400).json({
-        error: 'Email and password are required',
-        error_es: 'Email y contraseña son requeridos'
-      });
-    }
-
-    // Get user from database
-    const { data: user, error } = await supabase
-      .from('users')
-      .select('id, email, name, password_hash, is_active, failed_login_attempts, locked_until')
-      .eq('email', email.toLowerCase())
-      .single();
-
-    if (error || !user) {
-      return res.status(401).json({
-        error: 'Invalid email or password',
-        error_es: 'Email o contraseña inválidos'
-      });
-    }
-
-    // Check if account is locked
-    if (user.locked_until && new Date(user.locked_until) > new Date()) {
-      return res.status(423).json({
-        error: 'Account temporarily locked due to failed login attempts',
-        error_es: 'Cuenta bloqueada temporalmente por intentos fallidos'
-      });
-    }
-
-    // Check if account is active
-    if (!user.is_active) {
-      return res.status(401).json({
-        error: 'Account is inactive',
-        error_es: 'Cuenta inactiva'
-      });
-    }
-
-    // Verify password
-    const isPasswordValid = await bcrypt.compare(password, user.password_hash);
-
-    if (!isPasswordValid) {
-      // Increment failed login attempts
-      const failedAttempts = (user.failed_login_attempts || 0) + 1;
-      const lockUntil = failedAttempts >= 5 ? new Date(Date.now() + 30 * 60 * 1000) : null; // Lock for 30 minutes after 5 failed attempts
-
-      await supabase
-        .from('users')
-        .update({
-          failed_login_attempts: failedAttempts,
-          locked_until: lockUntil
-        })
-        .eq('id', user.id);
-
-      return res.status(401).json({
-        error: 'Invalid email or password',
-        error_es: 'Email o contraseña inválidos'
-      });
-    }
-
-    // Reset failed login attempts on successful login
-    await supabase
-      .from('users')
-      .update({
-        failed_login_attempts: 0,
-        locked_until: null,
-        last_login: new Date().toISOString()
-      })
-      .eq('id', user.id);
-
-    // Generate JWT token
-    const token = generateToken(user.id);
-
-    console.log(`✅ User logged in: ${user.email}`);
-
-    res.json({
-      message: 'Login successful',
-      message_es: 'Inicio de sesión exitoso',
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name
-      },
-      token
-    });
-
-  } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({
-      error: 'Login failed',
-      error_es: 'Error en el inicio de sesión'
-    });
-  }
-});
-
-// Get current user profile endpoint
-app.get('/api/auth/profile', authenticateToken, async (req, res) => {
-  try {
-    res.json({
-      user: {
-        id: req.user.id,
-        email: req.user.email,
-        name: req.user.name
-      }
-    });
-  } catch (error) {
-    console.error('Profile fetch error:', error);
-    res.status(500).json({
-      error: 'Failed to fetch profile',
-      error_es: 'Error al obtener perfil'
-    });
-  }
-});
-
-// Update profile endpoint
-app.put('/api/auth/profile', authenticateToken, async (req, res) => {
-  try {
-    const { name } = req.body;
-
-    if (!name || !name.trim()) {
-      return res.status(400).json({
-        error: 'Name is required',
-        error_es: 'Nombre es requerido'
-      });
-    }
-
-    const { data: updatedUser, error } = await supabase
-      .from('users')
-      .update({ name: name.trim() })
-      .eq('id', req.user.id)
-      .select('id, email, name')
-      .single();
-
-    if (error) {
-      console.error('Profile update error:', error);
-      return res.status(500).json({
-        error: 'Failed to update profile',
-        error_es: 'Error al actualizar perfil'
-      });
-    }
-
-    res.json({
-      message: 'Profile updated successfully',
-      message_es: 'Perfil actualizado exitosamente',
-      user: updatedUser
-    });
-
-  } catch (error) {
-    console.error('Profile update error:', error);
-    res.status(500).json({
-      error: 'Failed to update profile',
-      error_es: 'Error al actualizar perfil'
-    });
-  }
-});
-
-// Change password endpoint
-app.put('/api/auth/change-password', authenticateToken, async (req, res) => {
-  try {
-    const { currentPassword, newPassword } = req.body;
-
-    if (!currentPassword || !newPassword) {
-      return res.status(400).json({
-        error: 'Current password and new password are required',
-        error_es: 'Contraseña actual y nueva contraseña son requeridas'
-      });
-    }
-
-    // Validate new password strength
-    const passwordValidation = validatePassword(newPassword);
-    if (!passwordValidation.valid) {
-      return res.status(400).json({
-        error: passwordValidation.message,
-        error_es: 'La contraseña debe tener al menos 8 caracteres con mayúscula, minúscula y número'
-      });
-    }
-
-    // Get current user with password hash
-    const { data: user, error } = await supabase
-      .from('users')
-      .select('password_hash')
-      .eq('id', req.user.id)
-      .single();
-
-    if (error || !user) {
-      return res.status(404).json({
-        error: 'User not found',
-        error_es: 'Usuario no encontrado'
-      });
-    }
-
-    // Verify current password
-    const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.password_hash);
-    if (!isCurrentPasswordValid) {
-      return res.status(401).json({
-        error: 'Current password is incorrect',
-        error_es: 'Contraseña actual incorrecta'
-      });
-    }
-
-    // Hash new password
-    const saltRounds = 12;
-    const newPasswordHash = await bcrypt.hash(newPassword, saltRounds);
-
-    // Update password
-    await supabase
-      .from('users')
-      .update({
-        password_hash: newPasswordHash,
-        password_changed_at: new Date().toISOString()
-      })
-      .eq('id', req.user.id);
-
-    console.log(`✅ Password changed for user: ${req.user.email}`);
-
-    res.json({
-      message: 'Password changed successfully',
-      message_es: 'Contraseña cambiada exitosamente'
-    });
-
-  } catch (error) {
-    console.error('Password change error:', error);
-    res.status(500).json({
-      error: 'Failed to change password',
-      error_es: 'Error al cambiar contraseña'
-    });
-  }
-});
-
-// Logout endpoint (client-side token removal, but logged for security)
-app.post('/api/auth/logout', authenticateToken, async (req, res) => {
-  try {
-    console.log(`✅ User logged out: ${req.user.email}`);
-
-    res.json({
-      message: 'Logged out successfully',
-      message_es: 'Sesión cerrada exitosamente'
-    });
-  } catch (error) {
-    console.error('Logout error:', error);
-    res.status(500).json({
-      error: 'Logout failed',
-      error_es: 'Error al cerrar sesión'
-    });
-  }
-});
 
 // Chat endpoint
-app.post('/api/chat', authenticateToken, async (req, res) => {
+app.post('/api/chat', async (req, res) => {
   try {
-    const { message } = req.body;
-    const userId = req.user.id; // Use authenticated user's ID
+    const { message, userId = uuidv4() } = req.body;
     const clientIP = req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress;
 
     if (!message || !message.trim()) {
@@ -1225,7 +900,7 @@ async function generateVoiceResponse(text, language) {
 }
 
 // Voice endpoint
-app.post('/api/voice', authenticateToken, async (req, res) => {
+app.post('/api/voice', async (req, res) => {
   try {
     const { text, language = 'es' } = req.body;
 
@@ -1293,9 +968,9 @@ app.post('/api/voice', authenticateToken, async (req, res) => {
 });
 
 // Data deletion endpoint
-app.delete('/api/data', authenticateToken, async (req, res) => {
+app.delete('/api/data/:userId', async (req, res) => {
   try {
-    const userId = req.user.id; // Use authenticated user's ID
+    const { userId } = req.params;
 
     const { error } = await supabase
       .from('conversations')
@@ -1345,10 +1020,7 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-app.listen(PORT, async () => {
+app.listen(PORT, () => {
   console.log(`🤖 Rob-AI Assistant running on port ${PORT}`);
   console.log(`📊 Ready to help José create results, not applause`);
-
-  // Initialize system users (Jose and Admin)
-  await initializeSystemUsers();
 });

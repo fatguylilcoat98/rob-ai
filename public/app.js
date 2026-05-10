@@ -6,6 +6,7 @@
 
 class RobAI {
   constructor() {
+    this.userId = this.getUserId();
     this.currentLanguage = 'en'; // Default to English
     this.isVoiceEnabled = false;
     this.isRecording = false;
@@ -16,7 +17,12 @@ class RobAI {
     // Authentication state
     this.isAuthenticated = false;
     this.currentUser = null;
-    this.authToken = null;
+
+    // Authorized users - ONLY these two can access
+    this.authorizedUsers = {
+      'admin': 'Rob2024!Secure',
+      'Jose': 'Jose2024!Secure'
+    };
 
     // DOM Elements
     this.app = document.getElementById('app');
@@ -66,12 +72,11 @@ class RobAI {
         const parsed = JSON.parse(authData);
         const now = Date.now();
 
-        // Check if token hasn't expired
-        if (parsed.token && parsed.expires > now && parsed.user) {
-          this.authToken = parsed.token;
-          this.currentUser = parsed.user;
+        // Check if session hasn't expired (24 hours)
+        if (parsed.expires > now && this.authorizedUsers[parsed.username]) {
           this.isAuthenticated = true;
-          console.log(`🔓 Authentication restored for ${parsed.user.email}`);
+          this.currentUser = parsed.username;
+          console.log(`🔓 Persistent login restored for ${parsed.username}`);
           return;
         }
       } catch (e) {
@@ -80,26 +85,9 @@ class RobAI {
     }
 
     // Clear invalid auth
-    this.clearAuth();
-  }
-
-  clearAuth() {
     localStorage.removeItem('rob-auth');
     this.isAuthenticated = false;
     this.currentUser = null;
-    this.authToken = null;
-  }
-
-  saveAuth(token, user) {
-    const authData = {
-      token,
-      user,
-      expires: Date.now() + (23 * 60 * 60 * 1000) // 23 hours to be safe
-    };
-    localStorage.setItem('rob-auth', JSON.stringify(authData));
-    this.authToken = token;
-    this.currentUser = user;
-    this.isAuthenticated = true;
   }
 
   initializeApp() {
@@ -129,6 +117,15 @@ class RobAI {
     // Show the main app
     this.app.style.display = 'block';
     this.hideLoginScreen();
+  }
+
+  getUserId() {
+    let userId = localStorage.getItem('rob-user-id');
+    if (!userId) {
+      userId = 'user_' + Math.random().toString(36).substr(2, 9);
+      localStorage.setItem('rob-user-id', userId);
+    }
+    return userId;
   }
 
   detectUserLanguage() {
@@ -191,10 +188,6 @@ class RobAI {
     if (this.app) {
       this.app.style.display = 'none';
     }
-    const passwordForm = document.getElementById('passwordChangeForm');
-    if (passwordForm) {
-      passwordForm.style.display = 'none';
-    }
 
     // Create login overlay if it doesn't exist
     let loginOverlay = document.getElementById('loginOverlay');
@@ -240,49 +233,29 @@ class RobAI {
             ROB-AI
           </div>
           <div style="color: rgba(255,255,255,0.7); font-size: 14px; letter-spacing: 1px;">
-            <span class="login-subtitle-es">SISTEMA TÁCTICO DE RESULTADOS</span>
-            <span class="login-subtitle-en" style="display: none;">TACTICAL RESULTS SYSTEM</span>
+            ACCESS AUTHORIZED PERSONNEL ONLY
           </div>
-        </div>
-
-        <!-- Language Toggle -->
-        <div style="text-align: center; margin-bottom: 20px;">
-          <button id="loginLangToggle" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 8px 16px; border-radius: 20px; cursor: pointer; font-size: 12px; transition: all 0.3s;">
-            ES / EN
-          </button>
-        </div>
-
-        <!-- Login Only - Private System -->
-        <div style="text-align: center; margin-bottom: 20px; color: rgba(255,255,255,0.6); font-size: 12px;">
-          <span class="private-es">SISTEMA PRIVADO - SOLO USUARIOS AUTORIZADOS</span>
-          <span class="private-en" style="display: none;">PRIVATE SYSTEM - AUTHORIZED USERS ONLY</span>
         </div>
 
         <!-- Login Form -->
-        <form id="loginForm" style="display: block;">
+        <form id="loginForm">
           <div style="margin-bottom: 20px;">
-            <input type="email" id="loginEmail" placeholder="Email" required style="width: 100%; padding: 15px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 10px; color: white; font-size: 14px; box-sizing: border-box;" />
+            <input type="text" id="loginUsername" placeholder="Username" required style="width: 100%; padding: 15px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 10px; color: white; font-size: 14px; box-sizing: border-box;" />
           </div>
           <div style="margin-bottom: 25px;">
-            <input type="password" id="loginPassword" required style="width: 100%; padding: 15px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 10px; color: white; font-size: 14px; box-sizing: border-box;" />
+            <input type="password" id="loginPassword" placeholder="Password" required style="width: 100%; padding: 15px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 10px; color: white; font-size: 14px; box-sizing: border-box;" />
           </div>
-          <button type="submit" id="loginSubmit" style="width: 100%; padding: 15px; background: linear-gradient(45deg, #00ff88, #00cc6a); border: none; border-radius: 10px; color: #1a1a2e; font-weight: 700; cursor: pointer; transition: transform 0.2s; text-transform: uppercase; letter-spacing: 1px;">
-            <span class="login-btn-es">ACCEDER</span>
-            <span class="login-btn-en" style="display: none;">LOGIN</span>
+          <button type="submit" style="width: 100%; padding: 15px; background: linear-gradient(45deg, #00ff88, #00cc6a); border: none; border-radius: 10px; color: #1a1a2e; font-weight: 700; cursor: pointer; transition: transform 0.2s; text-transform: uppercase; letter-spacing: 1px;">
+            SECURE ACCESS
           </button>
         </form>
 
-
-        <!-- Error/Success Messages -->
-        <div id="authMessage" style="margin-top: 20px; padding: 12px; border-radius: 8px; text-align: center; display: none; font-size: 14px;">
+        <!-- Error Messages -->
+        <div id="loginError" style="margin-top: 20px; color: #ff4757; text-align: center; display: none; font-size: 14px;">
         </div>
 
-        <!-- Loading State -->
-        <div id="authLoading" style="display: none; text-align: center; margin-top: 20px;">
-          <div style="color: rgba(255,255,255,0.7); font-size: 14px;">
-            <span class="loading-es">Procesando...</span>
-            <span class="loading-en" style="display: none;">Processing...</span>
-          </div>
+        <div style="text-align: center; margin-top: 20px; color: rgba(255,255,255,0.6); font-size: 12px;">
+          ⚠️ Unauthorized access is prohibited
         </div>
 
       </div>
@@ -292,157 +265,58 @@ class RobAI {
   }
 
   setupLoginEventListeners() {
-    // Language toggle
-    const loginLangToggle = document.getElementById('loginLangToggle');
-    if (loginLangToggle) {
-      loginLangToggle.addEventListener('click', () => {
-        const newLang = this.currentLanguage === 'es' ? 'en' : 'es';
-        this.setLanguage(newLang);
-        this.updateLoginLanguage(newLang);
-      });
+    const loginForm = document.getElementById('loginForm');
+    if (loginForm) {
+      loginForm.addEventListener('submit', (e) => this.handleLogin(e));
     }
-
-    // Form submission - Login only
-    const loginFormEl = document.getElementById('loginForm');
-    if (loginFormEl) {
-      loginFormEl.addEventListener('submit', (e) => this.handleLogin(e));
-    }
-
-    // Update initial language
-    this.updateLoginLanguage(this.currentLanguage);
   }
 
-
-  updateLoginLanguage(lang) {
-    // Update placeholder text for login password
-    const loginPassword = document.getElementById('loginPassword');
-    if (loginPassword) {
-      loginPassword.placeholder = lang === 'es' ? 'Contraseña' : 'Password';
-    }
-
-    // Update all language-specific elements
-    this.updateLanguageElements(lang);
-  }
-
-  async handleLogin(e) {
+  handleLogin(e) {
     e.preventDefault();
 
-    const email = document.getElementById('loginEmail').value;
+    const username = document.getElementById('loginUsername').value;
     const password = document.getElementById('loginPassword').value;
 
-    if (!email || !password) {
-      this.showAuthMessage('error',
-        this.currentLanguage === 'es' ? 'Por favor completa todos los campos' : 'Please fill all fields'
-      );
-      return;
-    }
-
-    this.showAuthLoading(true);
-
-    try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ email, password })
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        this.saveAuth(data.token, data.user);
-        this.showAuthMessage('success', data.message || data.message_es);
-        setTimeout(() => {
-          this.initializeApp();
-        }, 1000);
-      } else {
-        this.showAuthMessage('error', data.error || data.error_es || 'Login failed');
-      }
-    } catch (error) {
-      console.error('Login error:', error);
-      this.showAuthMessage('error',
-        this.currentLanguage === 'es' ? 'Error de conexión' : 'Connection error'
-      );
-    } finally {
-      this.showAuthLoading(false);
+    if (this.authorizedUsers[username] && this.authorizedUsers[username] === password) {
+      // Successful login
+      this.authenticateUser(username);
+    } else {
+      // Failed login
+      this.showLoginError('Invalid credentials. Access denied.');
     }
   }
 
+  authenticateUser(username) {
+    this.isAuthenticated = true;
+    this.currentUser = username;
 
-  showAuthMessage(type, message) {
-    const messageEl = document.getElementById('authMessage');
-    if (messageEl) {
-      messageEl.style.display = 'block';
-      messageEl.textContent = message;
-
-      if (type === 'success') {
-        messageEl.style.background = 'rgba(0, 255, 136, 0.2)';
-        messageEl.style.border = '1px solid rgba(0, 255, 136, 0.3)';
-        messageEl.style.color = '#00ff88';
-      } else {
-        messageEl.style.background = 'rgba(255, 71, 71, 0.2)';
-        messageEl.style.border = '1px solid rgba(255, 71, 71, 0.3)';
-        messageEl.style.color = '#ff4747';
-      }
-    }
-  }
-
-  clearAuthMessage() {
-    const messageEl = document.getElementById('authMessage');
-    if (messageEl) {
-      messageEl.style.display = 'none';
-    }
-  }
-
-  showAuthLoading(show) {
-    const loadingEl = document.getElementById('authLoading');
-    const submitBtns = document.querySelectorAll('#loginSubmit, #registerSubmit');
-
-    if (loadingEl) {
-      loadingEl.style.display = show ? 'block' : 'none';
-    }
-
-    submitBtns.forEach(btn => {
-      btn.disabled = show;
-      btn.style.opacity = show ? '0.6' : '1';
-    });
-  }
-
-  async makeAuthenticatedRequest(url, options = {}) {
-    const headers = {
-      'Content-Type': 'application/json',
-      ...options.headers
+    // Store authentication with 24-hour expiration
+    const authData = {
+      username: username,
+      expires: Date.now() + (24 * 60 * 60 * 1000)
     };
+    localStorage.setItem('rob-auth', JSON.stringify(authData));
 
-    if (this.authToken) {
-      headers.Authorization = `Bearer ${this.authToken}`;
+    console.log(`✅ User authenticated: ${username}`);
+    this.initializeApp();
+  }
+
+  showLoginError(message) {
+    const errorEl = document.getElementById('loginError');
+    if (errorEl) {
+      errorEl.textContent = message;
+      errorEl.style.display = 'block';
+
+      setTimeout(() => {
+        errorEl.style.display = 'none';
+      }, 5000);
     }
-
-    const response = await fetch(url, {
-      ...options,
-      headers
-    });
-
-    // Handle token expiration
-    if (response.status === 401) {
-      this.clearAuth();
-      this.showLoginScreen();
-      throw new Error('Authentication expired');
-    }
-
-    return response;
   }
 
   logout() {
-    if (this.authToken) {
-      // Call logout endpoint in background
-      this.makeAuthenticatedRequest('/api/auth/logout', {
-        method: 'POST'
-      }).catch(err => console.log('Logout API call failed:', err));
-    }
-
-    this.clearAuth();
+    localStorage.removeItem('rob-auth');
+    this.isAuthenticated = false;
+    this.currentUser = null;
     this.showLoginScreen();
   }
 
@@ -485,26 +359,6 @@ class RobAI {
         }
       });
     }
-
-    // Add logout button to header
-    this.addLogoutButton();
-  }
-
-  addLogoutButton() {
-    const headerControls = document.querySelector('.header-controls');
-    if (headerControls && !document.getElementById('logoutBtn')) {
-      const logoutBtn = document.createElement('button');
-      logoutBtn.id = 'logoutBtn';
-      logoutBtn.className = 'delete-btn';
-      logoutBtn.title = this.currentLanguage === 'es' ? 'Cerrar sesión' : 'Logout';
-      logoutBtn.innerHTML = `
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M16,17V14H9V10H16V7L21,12L16,17M14,2A2,2 0 0,1 16,4V6H14V4H5V20H14V18H16V20A2,2 0 0,1 14,22H5A2,2 0 0,1 3,20V4A2,2 0 0,1 5,2H14Z"/>
-        </svg>
-      `;
-      logoutBtn.addEventListener('click', () => this.logout());
-      headerControls.insertBefore(logoutBtn, this.deleteDataBtn);
-    }
   }
 
   updateCharCount() {
@@ -536,9 +390,12 @@ class RobAI {
     this.showTypingIndicator();
 
     try {
-      const response = await this.makeAuthenticatedRequest('/api/chat', {
+      const response = await fetch('/api/chat', {
         method: 'POST',
-        body: JSON.stringify({ message })
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ message, userId: this.userId })
       });
 
       if (!response.ok) {
@@ -650,8 +507,11 @@ class RobAI {
 
   async playVoiceResponse(text, language) {
     try {
-      const response = await this.makeAuthenticatedRequest('/api/voice', {
+      const response = await fetch('/api/voice', {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
         body: JSON.stringify({ text, language })
       });
 
@@ -747,7 +607,7 @@ class RobAI {
     }
 
     try {
-      const response = await this.makeAuthenticatedRequest('/api/data', {
+      const response = await fetch(`/api/data/${this.userId}`, {
         method: 'DELETE'
       });
 
