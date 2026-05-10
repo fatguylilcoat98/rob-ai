@@ -25,23 +25,41 @@
     <!-- Password Change Form (hidden by default) -->
     <div id="passwordChangeForm" class="password-change-container" style="display: none;">
         <div class="password-change-card">
-            <h2>Change Your Password</h2>
-            <p>You're using a temporary password. Please set a new secure password to continue.</p>
+            <h2>
+                <span class="password-title-es">Cambia Tu Contraseña</span>
+                <span class="password-title-en" style="display: none;">Change Your Password</span>
+            </h2>
+            <p>
+                <span class="password-desc-es">Estás usando una contraseña temporal. Por favor, establece una nueva contraseña segura para continuar.</span>
+                <span class="password-desc-en" style="display: none;">You're using a temporary password. Please set a new secure password to continue.</span>
+            </p>
             <form id="changePasswordForm">
                 <div class="form-group">
-                    <label for="currentPassword">Current Password:</label>
+                    <label for="currentPassword">
+                        <span class="label-es">Contraseña Actual:</span>
+                        <span class="label-en" style="display: none;">Current Password:</span>
+                    </label>
                     <input type="password" id="currentPassword" readonly>
                 </div>
                 <div class="form-group">
-                    <label for="newPassword">New Password:</label>
+                    <label for="newPassword">
+                        <span class="label-es">Nueva Contraseña:</span>
+                        <span class="label-en" style="display: none;">New Password:</span>
+                    </label>
                     <input type="password" id="newPassword" required minlength="8">
                 </div>
                 <div class="form-group">
-                    <label for="confirmPassword">Confirm New Password:</label>
+                    <label for="confirmPassword">
+                        <span class="label-es">Confirmar Nueva Contraseña:</span>
+                        <span class="label-en" style="display: none;">Confirm New Password:</span>
+                    </label>
                     <input type="password" id="confirmPassword" required>
                 </div>
                 <div class="form-actions">
-                    <button type="submit" class="btn-primary">Change Password</button>
+                    <button type="submit" class="btn-primary">
+                        <span class="btn-text-es">Cambiar Contraseña</span>
+                        <span class="btn-text-en" style="display: none;">Change Password</span>
+                    </button>
                 </div>
                 <div id="passwordError" class="error-message" style="display: none;"></div>
             </form>

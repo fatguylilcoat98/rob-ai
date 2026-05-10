@@ -6,7 +6,6 @@
 
 class RobAI {
   constructor() {
-    this.userId = this.getUserId();
     this.currentLanguage = 'en'; // Default to English
     this.isVoiceEnabled = false;
     this.isRecording = false;
@@ -17,17 +16,7 @@ class RobAI {
     // Authentication state
     this.isAuthenticated = false;
     this.currentUser = null;
-
-    // Authorized users - ONLY these two can access
-    this.authorizedUsers = {
-      'admin': 'Rob2024!Secure',
-      'Jose': 'temp123'  // Temporary password - must be changed on first login
-    };
-
-    // Track temporary passwords that must be changed
-    this.temporaryPasswords = {
-      'Jose': true  // Jose must change password on first login
-    };
+    this.authToken = null;
 
     // DOM Elements
     this.app = document.getElementById('app');
@@ -77,11 +66,12 @@ class RobAI {
         const parsed = JSON.parse(authData);
         const now = Date.now();
 
-        // Check if session hasn't expired (24 hours)
-        if (parsed.expires > now && this.authorizedUsers[parsed.username]) {
+        // Check if token hasn't expired
+        if (parsed.token && parsed.expires > now && parsed.user) {
+          this.authToken = parsed.token;
+          this.currentUser = parsed.user;
           this.isAuthenticated = true;
-          this.currentUser = parsed.username;
-          console.log(`🔓 Persistent login restored for ${parsed.username}`);
+          console.log(`🔓 Authentication restored for ${parsed.user.email}`);
           return;
         }
       } catch (e) {
@@ -90,9 +80,26 @@ class RobAI {
     }
 
     // Clear invalid auth
+    this.clearAuth();
+  }
+
+  clearAuth() {
     localStorage.removeItem('rob-auth');
     this.isAuthenticated = false;
     this.currentUser = null;
+    this.authToken = null;
+  }
+
+  saveAuth(token, user) {
+    const authData = {
+      token,
+      user,
+      expires: Date.now() + (23 * 60 * 60 * 1000) // 23 hours to be safe
+    };
+    localStorage.setItem('rob-auth', JSON.stringify(authData));
+    this.authToken = token;
+    this.currentUser = user;
+    this.isAuthenticated = true;
   }
 
   initializeApp() {
@@ -124,67 +131,69 @@ class RobAI {
     this.hideLoginScreen();
   }
 
-  getUserId() {
-    let userId = localStorage.getItem('rob-user-id');
-    if (!userId) {
-      userId = 'user_' + Math.random().toString(36).substr(2, 9);
-      localStorage.setItem('rob-user-id', userId);
-    }
-    return userId;
-  }
-
   detectUserLanguage() {
-    // Detect browser language
+    // Check for stored language preference first
+    const storedLang = localStorage.getItem('rob-language');
+    if (storedLang && (storedLang === 'es' || storedLang === 'en')) {
+      this.setLanguage(storedLang);
+      console.log(`🌍 Using stored language preference: ${storedLang}`);
+      return;
+    }
+
+    // Auto-detect browser language
     const browserLang = navigator.language || navigator.userLanguage;
-    if (browserLang.startsWith('en')) {
-      this.setLanguage('en');
+    console.log(`🌍 Browser language detected: ${browserLang}`);
+
+    if (browserLang.startsWith('es')) {
+      this.setLanguage('es');
     } else {
-      this.setLanguage('en'); // Default to English
+      this.setLanguage('en');
     }
   }
 
   setLanguage(lang) {
     this.currentLanguage = lang;
-    document.body.className = `lang-${lang}`;
+    localStorage.setItem('rob-language', lang);
 
-    // Update placeholders (with null checks)
-    if (lang === 'en') {
-      if (this.messageInput) this.messageInput.placeholder = 'Type your question here...';
-      if (this.langToggle) this.langToggle.textContent = 'EN';
-    } else {
-      if (this.messageInput) this.messageInput.placeholder = 'Escribe tu pregunta aquí...';
-      if (this.langToggle) this.langToggle.textContent = 'ES';
+    // Update language-dependent elements
+    this.updateLanguageElements(lang);
+    this.updateLanguageToggle(lang);
+    console.log(`🌐 Language set to: ${lang}`);
+  }
+
+  updateLanguageElements(lang) {
+    // Update all elements with language variants
+    const elements = document.querySelectorAll('[class*="-es"], [class*="-en"]');
+    elements.forEach(element => {
+      if (element.classList.contains(`${element.classList[0].split('-')[0]}-${lang}`)) {
+        element.style.display = '';
+      } else if (element.classList.contains(`${element.classList[0].split('-')[0]}-${lang === 'es' ? 'en' : 'es'}`)) {
+        element.style.display = 'none';
+      }
+    });
+
+    // Update placeholder text for message input
+    if (this.messageInput) {
+      this.messageInput.placeholder = lang === 'es'
+        ? 'Escribe tu pregunta aquí...'
+        : 'Type your question here...';
     }
+  }
 
-    // Update voice button text visibility
-    const esTexts = document.querySelectorAll('.btn-text-es, .auth-text-es, .warning-es');
-    const enTexts = document.querySelectorAll('.btn-text-en, .auth-text-en, .warning-en');
-
-    if (lang === 'en') {
-      esTexts.forEach(el => el.style.display = 'none');
-      enTexts.forEach(el => el.style.display = 'inline');
-    } else {
-      esTexts.forEach(el => el.style.display = 'inline');
-      enTexts.forEach(el => el.style.display = 'none');
+  updateLanguageToggle(lang) {
+    if (this.langToggle) {
+      this.langToggle.querySelector('.lang-current').textContent = lang.toUpperCase();
     }
-
-    // Update voice recognition language if currently recording
-    if (this.recognition && this.isRecording) {
-      console.log(`Switching speech recognition to ${lang}`);
-      this.stopSpeechRecognition();
-      // Small delay to ensure proper restart
-      setTimeout(() => {
-        this.startSpeechRecognition();
-      }, 100);
-    }
-
-    console.log(`Language switched to ${lang}, voice will use ${lang === 'en' ? 'en-US' : 'es-ES'}`);
   }
 
   showLoginScreen() {
-    // Hide main app (with null check)
+    // Hide main app and password change form
     if (this.app) {
       this.app.style.display = 'none';
+    }
+    const passwordForm = document.getElementById('passwordChangeForm');
+    if (passwordForm) {
+      passwordForm.style.display = 'none';
     }
 
     // Create login overlay if it doesn't exist
@@ -195,6 +204,7 @@ class RobAI {
     }
 
     loginOverlay.style.display = 'flex';
+    this.setupLoginEventListeners();
   }
 
   hideLoginScreen() {
@@ -207,207 +217,232 @@ class RobAI {
   createLoginOverlay() {
     const overlay = document.createElement('div');
     overlay.id = 'loginOverlay';
+    overlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      font-family: 'Inter', sans-serif;
+    `;
+
     overlay.innerHTML = `
-      <div class="login-container">
-        <div class="login-header">
-          <div class="login-avatar">
-            <div class="login-avatar-core">R</div>
+      <div style="background: rgba(255,255,255,0.05); backdrop-filter: blur(20px); border-radius: 20px; padding: 40px; max-width: 400px; width: 90%; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 20px 40px rgba(0,0,0,0.3);">
+
+        <!-- Logo Section -->
+        <div style="text-align: center; margin-bottom: 30px;">
+          <div style="font-size: 48px; font-weight: 800; color: #00ff88; margin-bottom: 10px; text-shadow: 0 0 20px rgba(0,255,136,0.3);">
+            ROB-AI
           </div>
-          <h1>ROB-AI ACCESS</h1>
-          <p class="login-subtitle">AUTHORIZED PERSONNEL ONLY</p>
+          <div style="color: rgba(255,255,255,0.7); font-size: 14px; letter-spacing: 1px;">
+            <span class="login-subtitle-es">SISTEMA TÁCTICO DE RESULTADOS</span>
+            <span class="login-subtitle-en" style="display: none;">TACTICAL RESULTS SYSTEM</span>
+          </div>
         </div>
 
-        <form class="login-form" id="authForm">
-          <div class="login-error" id="loginError" style="display: none;"></div>
+        <!-- Language Toggle -->
+        <div style="text-align: center; margin-bottom: 20px;">
+          <button id="loginLangToggle" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 8px 16px; border-radius: 20px; cursor: pointer; font-size: 12px; transition: all 0.3s;">
+            ES / EN
+          </button>
+        </div>
 
-          <div class="input-group">
-            <input
-              type="text"
-              id="authUsername"
-              placeholder="Username"
-              required
-              autocomplete="username"
-              class="auth-input">
+        <!-- Login Only - Private System -->
+        <div style="text-align: center; margin-bottom: 20px; color: rgba(255,255,255,0.6); font-size: 12px;">
+          <span class="private-es">SISTEMA PRIVADO - SOLO USUARIOS AUTORIZADOS</span>
+          <span class="private-en" style="display: none;">PRIVATE SYSTEM - AUTHORIZED USERS ONLY</span>
+        </div>
+
+        <!-- Login Form -->
+        <form id="loginForm" style="display: block;">
+          <div style="margin-bottom: 20px;">
+            <input type="email" id="loginEmail" placeholder="Email" required style="width: 100%; padding: 15px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 10px; color: white; font-size: 14px; box-sizing: border-box;" />
           </div>
-
-          <div class="input-group">
-            <input
-              type="password"
-              id="authPassword"
-              placeholder="Password"
-              required
-              autocomplete="current-password"
-              class="auth-input">
+          <div style="margin-bottom: 25px;">
+            <input type="password" id="loginPassword" required style="width: 100%; padding: 15px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 10px; color: white; font-size: 14px; box-sizing: border-box;" />
           </div>
-
-          <button type="submit" class="auth-submit">
-            <span class="auth-text-es">ACCESO SEGURO</span>
-            <span class="auth-text-en" style="display: none;">SECURE ACCESS</span>
+          <button type="submit" id="loginSubmit" style="width: 100%; padding: 15px; background: linear-gradient(45deg, #00ff88, #00cc6a); border: none; border-radius: 10px; color: #1a1a2e; font-weight: 700; cursor: pointer; transition: transform 0.2s; text-transform: uppercase; letter-spacing: 1px;">
+            <span class="login-btn-es">ACCEDER</span>
+            <span class="login-btn-en" style="display: none;">LOGIN</span>
           </button>
         </form>
 
-        <div class="login-footer">
-          <p class="warning-text">
-            <span class="warning-es">⚠️ Acceso no autorizado está prohibido</span>
-            <span class="warning-en" style="display: none;">⚠️ Unauthorized access prohibited</span>
-          </p>
+
+        <!-- Error/Success Messages -->
+        <div id="authMessage" style="margin-top: 20px; padding: 12px; border-radius: 8px; text-align: center; display: none; font-size: 14px;">
         </div>
+
+        <!-- Loading State -->
+        <div id="authLoading" style="display: none; text-align: center; margin-top: 20px;">
+          <div style="color: rgba(255,255,255,0.7); font-size: 14px;">
+            <span class="loading-es">Procesando...</span>
+            <span class="loading-en" style="display: none;">Processing...</span>
+          </div>
+        </div>
+
       </div>
     `;
-
-    // Add event listener for form submission
-    overlay.querySelector('#authForm').addEventListener('submit', (e) => {
-      e.preventDefault();
-      this.attemptLogin();
-    });
 
     return overlay;
   }
 
-  attemptLogin() {
-    const username = document.getElementById('authUsername').value.trim();
-    const password = document.getElementById('authPassword').value;
-    const errorEl = document.getElementById('loginError');
+  setupLoginEventListeners() {
+    // Language toggle
+    const loginLangToggle = document.getElementById('loginLangToggle');
+    if (loginLangToggle) {
+      loginLangToggle.addEventListener('click', () => {
+        const newLang = this.currentLanguage === 'es' ? 'en' : 'es';
+        this.setLanguage(newLang);
+        this.updateLoginLanguage(newLang);
+      });
+    }
 
-    // Clear previous errors
-    errorEl.style.display = 'none';
+    // Form submission - Login only
+    const loginFormEl = document.getElementById('loginForm');
+    if (loginFormEl) {
+      loginFormEl.addEventListener('submit', (e) => this.handleLogin(e));
+    }
 
-    // Check credentials
-    if (this.authorizedUsers[username] && this.authorizedUsers[username] === password) {
-      // Check if this is a temporary password that needs to be changed
-      if (this.temporaryPasswords[username]) {
-        console.log(`🔑 Temporary password detected for ${username} - forcing password change`);
-        this.showPasswordChangeForm(username);
-      } else {
-        // Regular successful login
-        this.authenticateUser(username);
-      }
-    } else {
-      // Failed login
-      this.showLoginError(
-        this.currentLanguage === 'en'
-          ? 'Invalid credentials. Access denied.'
-          : 'Credenciales inválidas. Acceso denegado.'
+    // Update initial language
+    this.updateLoginLanguage(this.currentLanguage);
+  }
+
+
+  updateLoginLanguage(lang) {
+    // Update placeholder text for login password
+    const loginPassword = document.getElementById('loginPassword');
+    if (loginPassword) {
+      loginPassword.placeholder = lang === 'es' ? 'Contraseña' : 'Password';
+    }
+
+    // Update all language-specific elements
+    this.updateLanguageElements(lang);
+  }
+
+  async handleLogin(e) {
+    e.preventDefault();
+
+    const email = document.getElementById('loginEmail').value;
+    const password = document.getElementById('loginPassword').value;
+
+    if (!email || !password) {
+      this.showAuthMessage('error',
+        this.currentLanguage === 'es' ? 'Por favor completa todos los campos' : 'Please fill all fields'
       );
+      return;
+    }
 
-      // Clear password field
-      document.getElementById('authPassword').value = '';
+    this.showAuthLoading(true);
+
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ email, password })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        this.saveAuth(data.token, data.user);
+        this.showAuthMessage('success', data.message || data.message_es);
+        setTimeout(() => {
+          this.initializeApp();
+        }, 1000);
+      } else {
+        this.showAuthMessage('error', data.error || data.error_es || 'Login failed');
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      this.showAuthMessage('error',
+        this.currentLanguage === 'es' ? 'Error de conexión' : 'Connection error'
+      );
+    } finally {
+      this.showAuthLoading(false);
     }
   }
 
-  authenticateUser(username) {
-    // Set authentication state
-    this.isAuthenticated = true;
-    this.currentUser = username;
 
-    // Create persistent session (expires in 24 hours)
-    const authData = {
-      username: username,
-      expires: Date.now() + (24 * 60 * 60 * 1000), // 24 hours
-      timestamp: Date.now()
+  showAuthMessage(type, message) {
+    const messageEl = document.getElementById('authMessage');
+    if (messageEl) {
+      messageEl.style.display = 'block';
+      messageEl.textContent = message;
+
+      if (type === 'success') {
+        messageEl.style.background = 'rgba(0, 255, 136, 0.2)';
+        messageEl.style.border = '1px solid rgba(0, 255, 136, 0.3)';
+        messageEl.style.color = '#00ff88';
+      } else {
+        messageEl.style.background = 'rgba(255, 71, 71, 0.2)';
+        messageEl.style.border = '1px solid rgba(255, 71, 71, 0.3)';
+        messageEl.style.color = '#ff4747';
+      }
+    }
+  }
+
+  clearAuthMessage() {
+    const messageEl = document.getElementById('authMessage');
+    if (messageEl) {
+      messageEl.style.display = 'none';
+    }
+  }
+
+  showAuthLoading(show) {
+    const loadingEl = document.getElementById('authLoading');
+    const submitBtns = document.querySelectorAll('#loginSubmit, #registerSubmit');
+
+    if (loadingEl) {
+      loadingEl.style.display = show ? 'block' : 'none';
+    }
+
+    submitBtns.forEach(btn => {
+      btn.disabled = show;
+      btn.style.opacity = show ? '0.6' : '1';
+    });
+  }
+
+  async makeAuthenticatedRequest(url, options = {}) {
+    const headers = {
+      'Content-Type': 'application/json',
+      ...options.headers
     };
 
-    localStorage.setItem('rob-auth', JSON.stringify(authData));
-
-    console.log(`🔒 User ${username} authenticated successfully (persistent login enabled)`);
-
-    // Initialize the app
-    this.initializeApp();
-  }
-
-  showLoginError(message) {
-    const errorEl = document.getElementById('loginError');
-    errorEl.textContent = message;
-    errorEl.style.display = 'block';
-
-    // Auto-hide error after 5 seconds
-    setTimeout(() => {
-      errorEl.style.display = 'none';
-    }, 5000);
-  }
-
-  showPasswordChangeForm(username) {
-    // Hide any other screens
-    if (this.app) {
-      this.app.style.display = 'none';
+    if (this.authToken) {
+      headers.Authorization = `Bearer ${this.authToken}`;
     }
 
-    // Show password change form
-    const passwordChangeForm = document.getElementById('passwordChangeForm');
-    passwordChangeForm.style.display = 'flex';
-
-    // Set current password (readonly)
-    document.getElementById('currentPassword').value = this.authorizedUsers[username];
-
-    // Store username for password change
-    this.pendingPasswordChangeUser = username;
-
-    // Setup form handler
-    const form = document.getElementById('changePasswordForm');
-    const newForm = form.cloneNode(true);
-    form.parentNode.replaceChild(newForm, form);
-
-    newForm.addEventListener('submit', (e) => {
-      this.handlePasswordChange(e);
+    const response = await fetch(url, {
+      ...options,
+      headers
     });
 
-    console.log(`🔑 Password change form shown for ${username}`);
-  }
-
-  handlePasswordChange(event) {
-    event.preventDefault();
-
-    const newPassword = document.getElementById('newPassword').value;
-    const confirmPassword = document.getElementById('confirmPassword').value;
-
-    // Validate passwords
-    if (newPassword.length < 8) {
-      this.showPasswordError('Password must be at least 8 characters long');
-      return;
+    // Handle token expiration
+    if (response.status === 401) {
+      this.clearAuth();
+      this.showLoginScreen();
+      throw new Error('Authentication expired');
     }
 
-    if (newPassword !== confirmPassword) {
-      this.showPasswordError('Passwords do not match');
-      return;
-    }
-
-    if (newPassword === this.authorizedUsers[this.pendingPasswordChangeUser]) {
-      this.showPasswordError('New password must be different from temporary password');
-      return;
-    }
-
-    // Update password and remove temporary flag
-    this.authorizedUsers[this.pendingPasswordChangeUser] = newPassword;
-    this.temporaryPasswords[this.pendingPasswordChangeUser] = false;
-
-    console.log(`✅ Password changed successfully for ${this.pendingPasswordChangeUser}`);
-
-    // Hide password change form and authenticate user
-    document.getElementById('passwordChangeForm').style.display = 'none';
-    this.authenticateUser(this.pendingPasswordChangeUser);
-  }
-
-  showPasswordError(message) {
-    const errorDiv = document.getElementById('passwordError');
-    errorDiv.textContent = message;
-    errorDiv.style.display = 'block';
-
-    // Hide error after 5 seconds
-    setTimeout(() => {
-      errorDiv.style.display = 'none';
-    }, 5000);
+    return response;
   }
 
   logout() {
-    // Clear authentication
-    this.isAuthenticated = false;
-    this.currentUser = null;
-    localStorage.removeItem('rob-auth');
-    console.log('🔓 User logged out and persistent session cleared');
+    if (this.authToken) {
+      // Call logout endpoint in background
+      this.makeAuthenticatedRequest('/api/auth/logout', {
+        method: 'POST'
+      }).catch(err => console.log('Logout API call failed:', err));
+    }
 
-    console.log('User logged out');
-
-    // Show login screen
+    this.clearAuth();
     this.showLoginScreen();
   }
 
@@ -420,714 +455,325 @@ class RobAI {
       });
     }
 
-    // Voice toggle (with null check)
+    // Voice toggle
     if (this.voiceToggle) {
-      this.voiceToggle.addEventListener('click', () => {
-        this.isVoiceEnabled = !this.isVoiceEnabled;
-        this.voiceToggle.classList.toggle('active', this.isVoiceEnabled);
-
-        if (this.isVoiceEnabled) {
-          this.requestMicrophonePermission();
-          console.log('🔊 Voice responses enabled');
-        } else {
-          // Stop any current speech when disabling
-          this.stopCurrentSpeech();
-          console.log('🔇 Voice responses disabled - stopping current speech');
-        }
-      });
+      this.voiceToggle.addEventListener('click', () => this.toggleVoice());
     }
 
-    // Voice input (with null check)
+    // Voice input
     if (this.voiceInputBtn) {
-      this.voiceInputBtn.addEventListener('click', () => {
-        this.toggleVoiceInput();
-      });
+      this.voiceInputBtn.addEventListener('click', () => this.toggleVoiceInput());
     }
 
-    // Delete data (with null check)
+    // Data deletion
     if (this.deleteDataBtn) {
-      this.deleteDataBtn.addEventListener('click', () => {
-        this.deleteUserData();
-      });
+      this.deleteDataBtn.addEventListener('click', () => this.deleteUserData());
     }
 
-    // Chat form (with null check)
+    // Chat form
     if (this.chatForm) {
-      this.chatForm.addEventListener('submit', (e) => {
-        e.preventDefault();
-        this.sendMessage();
-      });
+      this.chatForm.addEventListener('submit', (e) => this.sendMessage(e));
     }
 
-    // Message input (with null checks)
+    // Message input
     if (this.messageInput) {
-      this.messageInput.addEventListener('input', () => {
-        this.updateCharCount();
-        this.updateSendButton();
-        this.autoResize();
-      });
-
+      this.messageInput.addEventListener('input', () => this.updateCharCount());
       this.messageInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
           e.preventDefault();
-          if (this.sendButton && !this.sendButton.disabled) {
-            this.sendMessage();
-          }
+          this.sendMessage(e);
         }
       });
+    }
+
+    // Add logout button to header
+    this.addLogoutButton();
+  }
+
+  addLogoutButton() {
+    const headerControls = document.querySelector('.header-controls');
+    if (headerControls && !document.getElementById('logoutBtn')) {
+      const logoutBtn = document.createElement('button');
+      logoutBtn.id = 'logoutBtn';
+      logoutBtn.className = 'delete-btn';
+      logoutBtn.title = this.currentLanguage === 'es' ? 'Cerrar sesión' : 'Logout';
+      logoutBtn.innerHTML = `
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M16,17V14H9V10H16V7L21,12L16,17M14,2A2,2 0 0,1 16,4V6H14V4H5V20H14V18H16V20A2,2 0 0,1 14,22H5A2,2 0 0,1 3,20V4A2,2 0 0,1 5,2H14Z"/>
+        </svg>
+      `;
+      logoutBtn.addEventListener('click', () => this.logout());
+      headerControls.insertBefore(logoutBtn, this.deleteDataBtn);
     }
   }
 
   updateCharCount() {
-    if (!this.messageInput || !this.charCount) return;
+    if (this.messageInput && this.charCount) {
+      const count = this.messageInput.value.length;
+      this.charCount.textContent = `${count}/1000`;
 
-    const length = this.messageInput.value.length;
-    this.charCount.textContent = `${length}/1000`;
-
-    if (length > 900) {
-      this.charCount.style.color = 'var(--accent-color)';
-    } else {
-      this.charCount.style.color = 'var(--text-muted)';
+      if (this.sendButton) {
+        this.sendButton.disabled = count === 0 || count > 1000;
+      }
     }
   }
 
-  updateSendButton() {
-    if (!this.messageInput || !this.sendButton) return;
+  async sendMessage(e) {
+    e.preventDefault();
 
-    const hasText = this.messageInput.value.trim().length > 0;
-    this.sendButton.disabled = !hasText;
-  }
-
-  autoResize() {
-    if (!this.messageInput) return;
-
-    this.messageInput.style.height = 'auto';
-    this.messageInput.style.height = this.messageInput.scrollHeight + 'px';
-  }
-
-  async requestMicrophonePermission() {
-    try {
-      await navigator.mediaDevices.getUserMedia({ audio: true });
-    } catch (error) {
-      console.error('Microphone permission denied:', error);
-      this.isVoiceEnabled = false;
-      this.voiceToggle.classList.remove('active');
-      this.showError(
-        this.currentLanguage === 'en'
-          ? 'Microphone access denied. Please enable in your browser settings.'
-          : 'Acceso al micrófono denegado. Por favor habilítalo en la configuración del navegador.'
-      );
-    }
-  }
-
-  toggleVoiceInput() {
-    if (this.isRecording) {
-      this.stopSpeechRecognition();
-    } else {
-      this.startSpeechRecognition();
-    }
-  }
-
-  startSpeechRecognition() {
-    // Check for speech recognition support
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      this.showError(
-        this.currentLanguage === 'en'
-          ? 'Speech recognition not supported in this browser.'
-          : 'Reconocimiento de voz no soportado en este navegador.'
-      );
+    if (!this.messageInput || !this.messageInput.value.trim()) {
       return;
     }
 
-    this.recognition = new SpeechRecognition();
-    this.recognition.continuous = true;
-    this.recognition.interimResults = true;
-
-    // Set language based on current UI language - seamless switching
-    this.recognition.lang = this.currentLanguage === 'en' ? 'en-US' : 'es-ES';
-
-    let finalTranscript = '';
-
-    this.recognition.onstart = () => {
-      this.isRecording = true;
-      this.voiceInputBtn.classList.add('recording');
-      console.log(`Speech recognition started in ${this.recognition.lang}`);
-    };
-
-    this.recognition.onresult = (event) => {
-      let interimTranscript = '';
-
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          finalTranscript += transcript + ' ';
-        } else {
-          interimTranscript += transcript;
-        }
-      }
-
-      // Show live transcription in input field
-      this.messageInput.value = finalTranscript + interimTranscript;
-      this.updateCharCount();
-      this.updateSendButton();
-      this.autoResize();
-    };
-
-    this.recognition.onerror = (event) => {
-      console.error('Speech recognition error:', event.error);
-      this.stopSpeechRecognition();
-
-      // More specific error messages
-      let errorMessage;
-      if (event.error === 'not-allowed') {
-        errorMessage = this.currentLanguage === 'en'
-          ? 'Microphone access denied. Please allow microphone access.'
-          : 'Acceso al micrófono denegado. Por favor permite el acceso al micrófono.';
-      } else {
-        errorMessage = this.currentLanguage === 'en'
-          ? 'Speech recognition error. Please try again.'
-          : 'Error de reconocimiento de voz. Intenta de nuevo.';
-      }
-      this.showError(errorMessage);
-    };
-
-    this.recognition.onend = () => {
-      if (this.isRecording) {
-        // Recognition ended unexpectedly, restart with current language
-        this.recognition.lang = this.currentLanguage === 'en' ? 'en-US' : 'es-ES';
-        try {
-          this.recognition.start();
-        } catch (error) {
-          console.error('Failed to restart recognition:', error);
-          this.stopSpeechRecognition();
-        }
-      }
-    };
-
-    try {
-      this.recognition.start();
-    } catch (error) {
-      console.error('Failed to start speech recognition:', error);
-      this.showError(
-        this.currentLanguage === 'en'
-          ? 'Could not start speech recognition.'
-          : 'No se pudo iniciar el reconocimiento de voz.'
-      );
-    }
-  }
-
-  stopSpeechRecognition() {
-    if (this.recognition) {
-      this.recognition.stop();
-      this.recognition = null;
-    }
-    this.isRecording = false;
-    this.voiceInputBtn.classList.remove('recording');
-  }
-
-  async sendMessage() {
     const message = this.messageInput.value.trim();
-    if (!message) return;
-
-    // Capture voice output state (keep LISTEN button as-is)
-    const voiceWasEnabled = this.isVoiceEnabled;
-
-    // Stop current speech
-    this.stopCurrentSpeech();
-
-    // Turn off SPEAK button (voice input) if it's active
-    if (this.isRecording) {
-      this.stopSpeechRecognition();
-      console.log('🎤 SPEAK button turned OFF - user sent message');
-    }
-
-    // Add user message to chat
-    this.addMessage(message, 'user');
-
-    // Clear input
     this.messageInput.value = '';
     this.updateCharCount();
-    this.updateSendButton();
-    this.autoResize();
+
+    // Add user message to chat
+    this.addMessageToChat('user', message);
 
     // Show typing indicator
-    this.showTyping();
+    this.showTypingIndicator();
 
     try {
-      // Use the fast synchronized endpoint if voice WAS enabled when sending
-      const endpoint = voiceWasEnabled ? '/api/chat-with-voice' : '/api/chat';
-      console.log(`🚀 Using ${endpoint} for ${voiceWasEnabled ? 'synchronized' : 'text-only'} response`);
-
-      const response = await fetch(endpoint, {
+      const response = await this.makeAuthenticatedRequest('/api/chat', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          message: message,
-          userId: this.userId,
-          language: this.currentLanguage,
-          preferredLanguage: this.currentLanguage === 'en' ? 'English' : 'Spanish',
-          systemInstruction: this.currentLanguage === 'en'
-            ? 'Always respond in English. You are Rob, a direct business strategy assistant.'
-            : 'Siempre responde en español. Eres Rob, un asistente directo de estrategia de negocios.'
-        })
+        body: JSON.stringify({ message })
       });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
 
       const data = await response.json();
 
-      if (response.ok) {
-        // Hide typing indicator
-        this.hideTyping();
+      // Hide typing indicator
+      this.hideTypingIndicator();
 
-        // Check voice state at delivery time
-        console.log(`🔊 Voice state at delivery: voiceWasEnabled=${voiceWasEnabled}, hasAudioBuffer=${!!data.audioBuffer}`);
+      // Add Rob's response to chat
+      this.addMessageToChat('rob', data.response, data.language);
 
-        // SYNCHRONIZED DELIVERY: Use voice if it WAS enabled when message was sent
-        if (voiceWasEnabled && data.audioBuffer) {
-          console.log(`🎯 USING SYNCHRONIZED DELIVERY (voice was enabled when sent)`);
-          await this.deliverSynchronizedResponse(data.response, data.audioBuffer);
-        } else {
-          console.log(`📝 USING REGULAR TEXT DELIVERY`);
-          // Regular text-only delivery
-          this.addMessage(data.response, 'rob');
-        }
-
-        // Auto-play voice response if LISTEN is enabled
-        if (this.isVoiceEnabled) {
-          this.speakRobResponse(data.response);
-        }
-
-      } else {
-        throw new Error(data.error || 'Unknown error');
+      // Play voice if enabled
+      if (this.isVoiceEnabled) {
+        this.playVoiceResponse(data.response, data.language);
       }
 
     } catch (error) {
       console.error('Chat error:', error);
-      this.hideTyping();
+      this.hideTypingIndicator();
 
-      const errorMessage = this.currentLanguage === 'en'
-        ? 'Sorry, I\'m having technical issues. Try again in a moment.'
-        : 'Disculpa, tengo problemas técnicos. Intenta de nuevo en un momento.';
+      const errorMessage = this.currentLanguage === 'es'
+        ? 'Error de conexión. Intenta de nuevo.'
+        : 'Connection error. Please try again.';
 
-      this.addMessage(errorMessage, 'rob');
+      this.addMessageToChat('rob', errorMessage);
     }
   }
 
-  addMessage(text, sender) {
+  addMessageToChat(sender, message, language = null) {
+    if (!this.chatMessages) return;
+
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${sender}-message`;
 
-    const contentDiv = document.createElement('div');
-    contentDiv.className = 'message-content';
-
-    if (sender === 'rob') {
-      // Format Rob's responses (support for basic markdown-like formatting)
-      const formattedText = this.formatRobResponse(text);
-      contentDiv.innerHTML = formattedText;
-
-      // Speaker removed - using LISTEN button for voice control
+    if (sender === 'user') {
+      messageDiv.innerHTML = `
+        <div class="message-content">
+          <div class="message-text">
+            <p>${this.escapeHtml(message)}</p>
+          </div>
+        </div>
+      `;
     } else {
-      contentDiv.textContent = text;
+      messageDiv.innerHTML = `
+        <div class="message-avatar">
+          <div class="mini-avatar">
+            <div class="mini-core">R</div>
+            <div class="mini-glow"></div>
+          </div>
+        </div>
+        <div class="message-content">
+          <div class="message-text">
+            ${this.formatRobMessage(message)}
+          </div>
+        </div>
+      `;
     }
 
-    messageDiv.appendChild(contentDiv);
     this.chatMessages.appendChild(messageDiv);
-
-    // Scroll to bottom
     this.scrollToBottom();
   }
 
-  formatRobResponse(text) {
-    // Basic formatting for Rob's responses
-    return text
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')  // Bold
-      .replace(/\*(.*?)\*/g, '<em>$1</em>')              // Italic
-      .replace(/\n\n/g, '</p><p>')                       // Paragraphs
-      .replace(/\n/g, '<br>')                            // Line breaks
-      .replace(/^/, '<p>')                               // Start paragraph
-      .replace(/$/, '</p>');                             // End paragraph
+  formatRobMessage(message) {
+    // Convert line breaks to paragraphs
+    const paragraphs = message.split('\n\n').filter(p => p.trim());
+    return paragraphs.map(p => `<p>${this.escapeHtml(p.trim())}</p>`).join('');
   }
 
-  showTyping() {
-    this.typingIndicator.style.display = 'flex';
-    this.scrollToBottom();
-  }
-
-  hideTyping() {
-    this.typingIndicator.style.display = 'none';
+  escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
   }
 
   scrollToBottom() {
-    setTimeout(() => {
+    if (this.chatMessages) {
       this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
-    }, 100);
+    }
   }
 
-  // Removed playRobVoice - using enhanced speakRobResponse instead
+  showTypingIndicator() {
+    if (this.typingIndicator) {
+      this.typingIndicator.style.display = 'flex';
+      this.scrollToBottom();
+    }
+  }
 
-  async speakWithOpenAIVoice(text) {
+  hideTypingIndicator() {
+    if (this.typingIndicator) {
+      this.typingIndicator.style.display = 'none';
+    }
+  }
+
+  toggleVoice() {
+    this.isVoiceEnabled = !this.isVoiceEnabled;
+
+    if (this.voiceToggle) {
+      this.voiceToggle.style.background = this.isVoiceEnabled
+        ? 'rgba(0, 255, 136, 0.2)'
+        : 'rgba(255,255,255,0.1)';
+      this.voiceToggle.style.color = this.isVoiceEnabled ? '#00ff88' : 'rgba(255,255,255,0.7)';
+    }
+
+    console.log(`🎙️ Voice responses ${this.isVoiceEnabled ? 'enabled' : 'disabled'}`);
+  }
+
+  async playVoiceResponse(text, language) {
     try {
-      console.log(`🎙️ Attempting OpenAI TTS for: "${text.substring(0, 50)}..."`);
-
-      // Stop any current audio
-      this.stopCurrentSpeech();
-
-      // Add visual feedback that Rob is speaking
-      if (this.voiceToggle) {
-        this.voiceToggle.style.background = 'linear-gradient(135deg, var(--success-color), var(--primary-color))';
-      }
-
-      // Call backend OpenAI TTS API
-      console.log(`🔊 Calling /api/voice with language: ${this.currentLanguage}`);
-      const response = await fetch('/api/voice', {
+      const response = await this.makeAuthenticatedRequest('/api/voice', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          text: text,
-          language: this.currentLanguage
-        })
+        body: JSON.stringify({ text, language })
       });
 
-      if (!response.ok) {
-        console.error(`❌ Voice API failed: ${response.status}`);
-        throw new Error(`Voice API error: ${response.status}`);
-      }
+      if (response.ok) {
+        const audioBlob = await response.blob();
+        const audioUrl = URL.createObjectURL(audioBlob);
 
-      // Get audio blob and play it
-      const audioBlob = await response.blob();
-      console.log(`✅ Received audio blob: ${audioBlob.size} bytes, type: ${audioBlob.type}`);
-      const audioUrl = URL.createObjectURL(audioBlob);
+        // Stop current audio if playing
+        if (this.currentAudio) {
+          this.currentAudio.pause();
+          this.currentAudio = null;
+        }
 
-      // Create and play audio element
-      this.currentAudio = new Audio(audioUrl);
-      this.currentAudio.onended = () => {
-        this.cleanupAudio();
-      };
-      this.currentAudio.onerror = () => {
-        console.error('Audio playback failed');
-        this.cleanupAudio();
-      };
+        this.currentAudio = new Audio(audioUrl);
+        this.currentAudio.play();
 
-      await this.currentAudio.play();
-      console.log(`✅ PLAYING OPENAI AUDIO: ${this.currentLanguage} language, blob size: ${audioBlob.size} bytes`);
-      console.log(`🔊 Audio element created and playing OpenAI TTS`);
-
-    } catch (error) {
-      console.error('❌ OpenAI voice synthesis error:', error);
-      this.cleanupAudio();
-
-      // Fallback to browser TTS if OpenAI fails
-      console.log('🔄 Falling back to browser TTS');
-      this.speakWithBrowserTTS(text);
-    }
-  }
-
-  speakWithBrowserTTS(text) {
-    if (!('speechSynthesis' in window)) return;
-
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = this.currentLanguage === 'en' ? 'en-US' : 'es-ES';
-    utterance.rate = 1.0;
-    utterance.pitch = 0.9;
-    utterance.volume = 0.9;
-
-    utterance.onend = () => this.cleanupAudio();
-    utterance.onerror = () => this.cleanupAudio();
-
-    speechSynthesis.speak(utterance);
-    console.log('🎙️ Fallback: Using browser TTS');
-  }
-
-  cleanupAudio() {
-    // Reset visual feedback
-    if (this.voiceToggle) {
-      if (this.isVoiceEnabled) {
-        this.voiceToggle.style.background = 'linear-gradient(135deg, var(--primary-color), var(--secondary-color))';
-      } else {
-        this.voiceToggle.style.background = '';
-      }
-    }
-
-    if (this.currentAudio) {
-      this.currentAudio.pause();
-      this.currentAudio = null;
-    }
-  }
-
-  async deliverSynchronizedResponse(text, audioBuffer) {
-    try {
-      console.log(`⚡ VOICE FIRST: Starting audio load immediately while rendering text`);
-
-      // Start audio preparation immediately
-      const audioBytes = atob(audioBuffer);
-      const audioArray = new Uint8Array(audioBytes.length);
-      for (let i = 0; i < audioBytes.length; i++) {
-        audioArray[i] = audioBytes.charCodeAt(i);
-      }
-
-      const audioBlob = new Blob([audioArray], { type: 'audio/mpeg' });
-      const audioUrl = URL.createObjectURL(audioBlob);
-
-      // Create and start loading audio immediately
-      this.currentAudio = new Audio(audioUrl);
-
-      // Start audio loading in parallel with text rendering
-      const audioLoadPromise = new Promise((resolve, reject) => {
-        this.currentAudio.oncanplaythrough = () => {
-          console.log(`🎯 AUDIO LOADED: ${audioBlob.size} bytes ready while text renders`);
-          resolve();
+        // Clean up URL after playing
+        this.currentAudio.onended = () => {
+          URL.revokeObjectURL(audioUrl);
+          this.currentAudio = null;
         };
-        this.currentAudio.onerror = (e) => {
-          console.error('Audio loading error:', e);
-          reject(e);
-        };
-        this.currentAudio.load(); // Start loading immediately
-      });
-
-      // Render text immediately while audio loads
-      console.log(`📝 RENDERING TEXT: While audio loads in parallel`);
-      this.addMessage(text, 'rob');
-
-      // Wait for both audio loading and text rendering to complete
-      await Promise.all([
-        audioLoadPromise,
-        new Promise(resolve => {
-          // Ensure text is fully rendered
-          requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-              console.log(`✅ TEXT RENDERED: Ready for audio sync`);
-              resolve();
-            });
-          });
-        })
-      ]);
-
-      // Add visual feedback
-      if (this.voiceToggle) {
-        this.voiceToggle.style.background = 'linear-gradient(135deg, var(--success-color), var(--primary-color))';
       }
-
-      // Set up audio event handlers
-      this.currentAudio.onended = () => {
-        this.cleanupAudio();
-        URL.revokeObjectURL(audioUrl);
-      };
-      this.currentAudio.onerror = () => {
-        console.error('Audio playback failed');
-        this.cleanupAudio();
-        URL.revokeObjectURL(audioUrl);
-      };
-
-      // Start audio now that both text and audio are ready
-      console.log(`🚀 PERFECT SYNC: Audio catches up to text, starting playback NOW`);
-      this.currentAudio.play();
-
-      console.log(`✅ SYNCHRONIZED DELIVERY COMPLETE - voice caught up to text`);
-
     } catch (error) {
-      console.error('❌ Synchronized delivery failed:', error);
-      // Fallback: show text immediately
-      this.addMessage(text, 'rob');
-      this.cleanupAudio();
+      console.error('Voice playback error:', error);
     }
   }
 
-  playAudioBuffer(base64AudioData) {
-    // This method is now used for fallback cases only
-    try {
-      const audioBytes = atob(base64AudioData);
-      const audioArray = new Uint8Array(audioBytes.length);
-      for (let i = 0; i < audioBytes.length; i++) {
-        audioArray[i] = audioBytes.charCodeAt(i);
-      }
+  toggleVoiceInput() {
+    if (!('webkitSpeechRecognition' in window)) {
+      alert(this.currentLanguage === 'es'
+        ? 'Reconocimiento de voz no soportado en este navegador'
+        : 'Speech recognition not supported in this browser');
+      return;
+    }
 
-      const audioBlob = new Blob([audioArray], { type: 'audio/mpeg' });
-      const audioUrl = URL.createObjectURL(audioBlob);
-
-      // Add visual feedback
-      if (this.voiceToggle) {
-        this.voiceToggle.style.background = 'linear-gradient(135deg, var(--success-color), var(--primary-color))';
-      }
-
-      // Create and play audio element
-      this.currentAudio = new Audio(audioUrl);
-      this.currentAudio.onended = () => {
-        this.cleanupAudio();
-        URL.revokeObjectURL(audioUrl);
-      };
-      this.currentAudio.onerror = () => {
-        console.error('Audio playback failed');
-        this.cleanupAudio();
-        URL.revokeObjectURL(audioUrl);
-      };
-
-      this.currentAudio.play();
-      console.log(`🔊 FALLBACK AUDIO: Playing ${audioBlob.size} byte buffer`);
-
-    } catch (error) {
-      console.error('❌ Audio buffer playback error:', error);
-      this.cleanupAudio();
+    if (this.isRecording) {
+      this.stopVoiceInput();
+    } else {
+      this.startVoiceInput();
     }
   }
 
-  // Removed findBestVoice - now using OpenAI TTS with premium voices
+  startVoiceInput() {
+    const recognition = new webkitSpeechRecognition();
+    recognition.lang = this.currentLanguage === 'es' ? 'es-ES' : 'en-US';
+    recognition.continuous = false;
+    recognition.interimResults = false;
 
-  // Removed resetSpeakerButton - no longer needed
-
-  stopCurrentSpeech() {
-    // Stop OpenAI audio if playing
-    if (this.currentAudio) {
-      this.currentAudio.pause();
-      this.currentAudio = null;
-    }
-
-    // Stop browser speech synthesis
-    if ('speechSynthesis' in window) {
-      speechSynthesis.cancel();
-    }
-
-    // Reset visual feedback
-    if (this.voiceToggle) {
-      if (this.isVoiceEnabled) {
-        this.voiceToggle.style.background = 'linear-gradient(135deg, var(--primary-color), var(--secondary-color))';
-      } else {
-        this.voiceToggle.style.background = '';
+    recognition.onstart = () => {
+      this.isRecording = true;
+      if (this.voiceInputBtn) {
+        this.voiceInputBtn.style.background = '#ff4757';
+        this.voiceInputBtn.style.color = 'white';
       }
-      this.voiceToggle.classList.remove('speaking');
-    }
+    };
 
-    console.log('🔇 All speech stopped');
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      if (this.messageInput) {
+        this.messageInput.value = transcript;
+        this.updateCharCount();
+        this.messageInput.focus();
+      }
+    };
+
+    recognition.onend = () => {
+      this.stopVoiceInput();
+    };
+
+    recognition.onerror = (event) => {
+      console.error('Speech recognition error:', event.error);
+      this.stopVoiceInput();
+    };
+
+    recognition.start();
   }
 
-  async speakRobResponse(text) {
-    // Clean text for speech (remove markdown and HTML)
-    const cleanText = text
-      .replace(/<[^>]*>/g, '')                    // Remove HTML tags
-      .replace(/\*\*/g, '')                       // Remove bold markdown
-      .replace(/\*/g, '')                         // Remove italic markdown
-      .replace(/###|##|#/g, '')                   // Remove headers
-      .replace(/```[\s\S]*?```/g, '')             // Remove code blocks
-      .replace(/`([^`]+)`/g, '$1')                // Remove inline code
-      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')    // Remove links
-      .trim();
-
-    if (!cleanText) return;
-
-    // Use high-quality OpenAI TTS
-    console.log(`🚀 CALLING OpenAI TTS (not browser TTS) for: "${cleanText.substring(0, 30)}..."`);
-    this.speakWithOpenAIVoice(cleanText);
+  stopVoiceInput() {
+    this.isRecording = false;
+    if (this.voiceInputBtn) {
+      this.voiceInputBtn.style.background = 'rgba(255,255,255,0.1)';
+      this.voiceInputBtn.style.color = 'rgba(255,255,255,0.7)';
+    }
   }
 
   async deleteUserData() {
-    const confirmMessage = this.currentLanguage === 'en'
-      ? 'Are you sure you want to delete all your conversation data and log out? This cannot be undone.'
-      : '¿Estás seguro de que quieres eliminar todos tus datos de conversación y cerrar sesión? Esto no se puede deshacer.';
+    const confirmMessage = this.currentLanguage === 'es'
+      ? '¿Estás seguro? Esto eliminará todas tus conversaciones permanentemente.'
+      : 'Are you sure? This will permanently delete all your conversations.';
 
     if (!confirm(confirmMessage)) {
       return;
     }
 
     try {
-      const response = await fetch(`/api/data/${this.userId}`, {
+      const response = await this.makeAuthenticatedRequest('/api/data', {
         method: 'DELETE'
       });
 
-      const data = await response.json();
-
       if (response.ok) {
-        // Clear local storage
-        localStorage.removeItem('rob-user-id');
+        const data = await response.json();
+        alert(data.message || data.message_es);
 
-        // Log out user for security
-        this.logout();
-
-        // Show success message
-        const successMessage = this.currentLanguage === 'en'
-          ? 'Your data has been deleted and you have been logged out.'
-          : 'Tus datos han sido eliminados y tu sesión ha sido cerrada.';
-
-        alert(successMessage);
+        // Clear chat messages
+        if (this.chatMessages) {
+          const messages = this.chatMessages.querySelectorAll('.message:not(:first-child)');
+          messages.forEach(msg => msg.remove());
+        }
       } else {
-        throw new Error(data.error || 'Failed to delete data');
+        throw new Error('Delete failed');
       }
-
     } catch (error) {
-      console.error('Data deletion failed:', error);
-
-      const errorMessage = this.currentLanguage === 'en'
-        ? 'Failed to delete data. Please try again.'
-        : 'Error al eliminar datos. Por favor intenta de nuevo.';
-
-      this.showError(errorMessage);
+      console.error('Data deletion error:', error);
+      const errorMessage = this.currentLanguage === 'es'
+        ? 'Error al eliminar datos'
+        : 'Failed to delete data';
+      alert(errorMessage);
     }
   }
-
-  showError(message) {
-    this.addMessage(message, 'rob');
-  }
 }
 
-// Detect and handle Google Translate interference
-function detectGoogleTranslate() {
-  // Check for Google Translate elements
-  const translateElements = document.querySelectorAll('[data-translate], .goog-te-combo, .skiptranslate');
-  if (translateElements.length > 0) {
-    console.warn('⚠️ Google Translate detected - may cause app issues');
-
-    // Show user-friendly message
-    const warning = document.createElement('div');
-    warning.innerHTML = `
-      <div style="
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        background: linear-gradient(135deg, #ff6b00, #ff8533);
-        color: white;
-        padding: 12px 20px;
-        text-align: center;
-        font-weight: 600;
-        z-index: 10000;
-        font-family: Inter, sans-serif;
-        font-size: 14px;
-        box-shadow: 0 4px 20px rgba(255, 107, 0, 0.3);
-      ">
-        ⚠️ Google Translate detectado - Por favor desactívalo para mejor experiencia |
-        ⚠️ Google Translate detected - Please disable it for better experience
-        <button onclick="this.parentElement.parentElement.remove()" style="
-          background: rgba(255,255,255,0.2);
-          border: none;
-          color: white;
-          padding: 4px 8px;
-          border-radius: 4px;
-          margin-left: 10px;
-          cursor: pointer;
-        ">✕</button>
-      </div>
-    `;
-    document.body.appendChild(warning);
-
-    // Auto-remove after 10 seconds
-    setTimeout(() => {
-      if (warning.parentElement) {
-        warning.remove();
-      }
-    }, 10000);
-  }
-}
-
-// Initialize app when DOM is loaded
+// Initialize the application
 document.addEventListener('DOMContentLoaded', () => {
-  // Check for Google Translate interference
-  detectGoogleTranslate();
-
-  // Also check after a delay in case translate loads later
-  setTimeout(detectGoogleTranslate, 2000);
-
-  // Initialize the app
-  new RobAI();
+  window.robAI = new RobAI();
 });

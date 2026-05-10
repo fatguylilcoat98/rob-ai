@@ -7,10 +7,26 @@
 -- Enable necessary extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
+-- Users table for authentication
+CREATE TABLE IF NOT EXISTS users (
+  id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
+  email varchar(255) NOT NULL UNIQUE,
+  password_hash varchar(255) NOT NULL,
+  name varchar(255) NOT NULL,
+  is_active boolean DEFAULT true,
+  email_verified boolean DEFAULT false,
+  last_login timestamptz,
+  password_changed_at timestamptz DEFAULT now(),
+  failed_login_attempts integer DEFAULT 0,
+  locked_until timestamptz,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+
 -- Conversations table with encrypted storage
 CREATE TABLE IF NOT EXISTS conversations (
   id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
-  user_id text NOT NULL,
+  user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   message_encrypted jsonb NOT NULL, -- {iv, encrypted, authTag}
   response_encrypted jsonb NOT NULL, -- {iv, encrypted, authTag}
   language varchar(2) DEFAULT 'es' CHECK (language IN ('es', 'en')),
@@ -20,7 +36,7 @@ CREATE TABLE IF NOT EXISTS conversations (
 -- User analytics (non-PII only)
 CREATE TABLE IF NOT EXISTS user_analytics (
   id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
-  user_id text NOT NULL,
+  user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   session_start timestamptz DEFAULT now(),
   session_end timestamptz,
   messages_count integer DEFAULT 0,
@@ -61,6 +77,9 @@ CREATE TABLE IF NOT EXISTS knowledge_base (
 );
 
 -- Create indexes for performance (separate from table definitions)
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_users_active ON users(is_active);
+CREATE INDEX IF NOT EXISTS idx_users_email_active ON users(email, is_active);
 CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id);
 CREATE INDEX IF NOT EXISTS idx_conversations_created_at ON conversations(created_at);
 CREATE INDEX IF NOT EXISTS idx_conversations_user_date ON conversations(user_id, created_at);
@@ -70,17 +89,22 @@ CREATE INDEX IF NOT EXISTS idx_knowledge_tags ON knowledge_base USING gin(tags);
 CREATE INDEX IF NOT EXISTS idx_knowledge_priority ON knowledge_base(priority);
 
 -- Row Level Security (RLS) - Privacy first
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE conversations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_analytics ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies
+CREATE POLICY "Users can access their own profile"
+  ON users FOR ALL
+  USING (id = current_setting('app.current_user_id', true)::uuid);
+
 CREATE POLICY "Users can only access their own conversations"
   ON conversations FOR ALL
-  USING (user_id = current_setting('app.current_user_id', true));
+  USING (user_id = current_setting('app.current_user_id', true)::uuid);
 
 CREATE POLICY "Users can only access their own analytics"
   ON user_analytics FOR ALL
-  USING (user_id = current_setting('app.current_user_id', true));
+  USING (user_id = current_setting('app.current_user_id', true)::uuid);
 
 -- Content templates and knowledge base are system-managed
 ALTER TABLE content_templates ENABLE ROW LEVEL SECURITY;
@@ -115,6 +139,28 @@ CREATE TRIGGER trigger_update_user_analytics
   AFTER INSERT ON conversations
   FOR EACH ROW
   EXECUTE FUNCTION update_user_analytics();
+
+-- Trigger to update updated_at timestamp on users table
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_users_updated_at
+  BEFORE UPDATE ON users
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
+-- Function to set current user for RLS
+CREATE OR REPLACE FUNCTION set_current_user_id(user_id uuid)
+RETURNS void AS $$
+BEGIN
+  PERFORM set_config('app.current_user_id', user_id::text, true);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Data retention policy (auto-delete old conversations after 90 days)
 CREATE OR REPLACE FUNCTION cleanup_old_conversations()

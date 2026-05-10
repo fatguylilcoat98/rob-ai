@@ -2,7 +2,9 @@
 
 **No applause. Just results.**
 
-Rob is a direct, provocative AI assistant built for José's audience of entrepreneurs, creators, and professionals. Specializes in LinkedIn content creation, business monetization strategies, and cutting through the noise with brutal clarity.
+Rob is a private, direct AI assistant built for José and authorized users. Specializes in LinkedIn content creation, business monetization strategies, and cutting through the noise with brutal clarity.
+
+🔒 **PRIVATE SYSTEM** - Access restricted to authorized users only.
 
 ## 🎯 What Rob Does
 
@@ -56,6 +58,12 @@ SUPABASE_ANON_KEY=your-supabase-anon-key-here
 
 # Required - Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ENCRYPTION_KEY=your-64-character-hex-encryption-key-here
+
+# Required - Generate with: node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
+JWT_SECRET=your-128-character-hex-jwt-secret-here
+
+# Required - Get from https://tavily.com
+TAVILY_API_KEY=your-tavily-api-key-here
 ```
 
 ### 3. Setup Database
@@ -76,6 +84,17 @@ npm start
 ```
 
 Rob will be available at `http://localhost:3000`
+
+## 🔐 **Built-in Accounts**
+
+🔒 **Private System** - Rob automatically creates two authorized accounts on startup:
+
+- **José**: `jose@rob-ai.com` / `Jose2024!Secure`
+- **Admin**: `admin@rob-ai.com` / `Admin2024!Secure`
+
+These accounts are **encrypted in the code** and created automatically when the server starts. No setup required - just deploy and login!
+
+**⚠️ Important**: Change passwords after first login for security.
 
 ## 🏗️ Architecture
 
@@ -157,13 +176,13 @@ Text-to-speech synthesis
 
 **Response:** Audio stream (MP3)
 
-### DELETE `/api/data/:userId`
-Delete all user data
+### DELETE `/api/data`
+Delete current user's data (requires authentication)
 
 **Response:**
 ```json
 {
-  "message": "Data deleted successfully",
+  "message": "Data deleted successfully", 
   "message_es": "Datos eliminados exitosamente"
 }
 ```
@@ -172,9 +191,19 @@ Delete all user data
 
 ### Render (Recommended)
 
+Rob-AI is configured for deployment on Render with the included `render.yaml`.
+
 1. **Connect repository** to [Render](https://render.com)
-2. **Environment variables**: Set all required variables as secrets
+2. **Set environment variables** in Render dashboard:
+   - `OPENAI_API_KEY`
+   - `SUPABASE_URL`
+   - `SUPABASE_ANON_KEY`
+   - `ENCRYPTION_KEY` 
+   - `JWT_SECRET`
+   - `TAVILY_API_KEY`
 3. **Deploy**: Automatic deployment from `render.yaml`
+4. **Run database setup**: Execute `database-schema.sql` in Supabase
+5. **Automatic account creation**: José and Admin accounts are created automatically on first startup
 
 ### Manual Deployment
 

@@ -18,3 +18,7 @@ services:
         fromSecret: true
       - key: ENCRYPTION_KEY
         fromSecret: true
+      - key: JWT_SECRET
+        fromSecret: true
+      - key: TAVILY_API_KEY
+        fromSecret: true
