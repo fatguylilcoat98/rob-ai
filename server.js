@@ -578,7 +578,7 @@ Format as a brief professional summary that Rob can use to personalize future ad
 // Chat endpoint
 app.post('/api/chat', async (req, res) => {
   try {
-    const { message, userId = uuidv4() } = req.body;
+    const { message, userId = uuidv4(), language = 'en' } = req.body;
     const clientIP = req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress;
 
     if (!message || !message.trim()) {
@@ -588,8 +588,8 @@ app.post('/api/chat', async (req, res) => {
       });
     }
 
-    // Detect language
-    const detectedLanguage = detectLanguage(message);
+    // Use provided language instead of detecting
+    const detectedLanguage = language;
 
     // Check if we need real-time search
     const needsRealTimeSearch = shouldUseRealTimeSearch(message);
@@ -655,10 +655,16 @@ Source dates: ${realTimeData.results.map(r => r.publishedDate).join(', ')}`;
       content: timeLocationContext
     });
 
+    // Add language instruction
+    contextMessages.push({
+      role: "system",
+      content: `RESPOND IN ${detectedLanguage === 'es' ? 'SPANISH' : 'ENGLISH'} ONLY. No mixing languages.`
+    });
+
     // Add current message
     contextMessages.push({
       role: "user",
-      content: `[Language: ${detectedLanguage}] ${message}`
+      content: message
     });
 
     // Get response from OpenAI (optimized for speed)
@@ -790,10 +796,16 @@ Source dates: ${realTimeData.results.map(r => r.publishedDate).join(', ')}`;
       content: timeLocationContext
     });
 
+    // Add language instruction
+    contextMessages.push({
+      role: "system",
+      content: `RESPOND IN ${detectedLanguage === 'es' ? 'SPANISH' : 'ENGLISH'} ONLY. No mixing languages.`
+    });
+
     // Add current message
     contextMessages.push({
       role: "user",
-      content: `[Language: ${detectedLanguage}] ${message}`
+      content: message
     });
 
     // Generate text with streaming for faster perceived performance

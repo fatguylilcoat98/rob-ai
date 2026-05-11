@@ -393,7 +393,7 @@ class RobAI {
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ message, userId: this.userId })
+        body: JSON.stringify({ message, userId: this.userId, language: this.currentLanguage })
       });
 
       if (!response.ok) {
