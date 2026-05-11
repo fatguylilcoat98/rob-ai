@@ -101,6 +101,9 @@ class RobAI {
     this.updateCharCount();
     this.detectUserLanguage();
 
+    // Force initial language display update
+    this.updateLanguageElements(this.currentLanguage);
+
     // Focus input if available
     if (this.messageInput) {
       this.messageInput.focus();
@@ -137,15 +140,9 @@ class RobAI {
       return;
     }
 
-    // Auto-detect browser language
-    const browserLang = navigator.language || navigator.userLanguage;
-    console.log(`🌍 Browser language detected: ${browserLang}`);
-
-    if (browserLang.startsWith('es')) {
-      this.setLanguage('es');
-    } else {
-      this.setLanguage('en');
-    }
+    // Default to English for clean startup
+    this.setLanguage('en');
+    console.log(`🌍 Language set to default: en`);
   }
 
   setLanguage(lang) {
@@ -159,15 +156,16 @@ class RobAI {
   }
 
   updateLanguageElements(lang) {
-    // Update all elements with language variants
-    const elements = document.querySelectorAll('[class*="-es"], [class*="-en"]');
-    elements.forEach(element => {
-      if (element.classList.contains(`${element.classList[0].split('-')[0]}-${lang}`)) {
-        element.style.display = '';
-      } else if (element.classList.contains(`${element.classList[0].split('-')[0]}-${lang === 'es' ? 'en' : 'es'}`)) {
-        element.style.display = 'none';
-      }
-    });
+    // Strict language separation - show only selected language, hide the other
+    if (lang === 'es') {
+      // Show Spanish, hide English
+      document.querySelectorAll('[class*="-es"]').forEach(el => el.style.display = '');
+      document.querySelectorAll('[class*="-en"]').forEach(el => el.style.display = 'none');
+    } else {
+      // Show English, hide Spanish
+      document.querySelectorAll('[class*="-en"]').forEach(el => el.style.display = '');
+      document.querySelectorAll('[class*="-es"]').forEach(el => el.style.display = 'none');
+    }
 
     // Update placeholder text for message input
     if (this.messageInput) {
